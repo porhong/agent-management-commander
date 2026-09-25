@@ -185,9 +185,23 @@ export const ipcContract = {
       usedBy: z.array(z.object({ id: itemId, relation: z.string(), mode: z.string().nullable() })),
     }),
   },
+  /** Every reference edge at once, so a list can show "used by" counts without N calls. */
+  'library.graph': {
+    input: z.void(),
+    output: z.object({
+      edges: z.array(
+        z.object({ from: itemId, to: itemId, relation: z.string(), mode: z.string().nullable() }),
+      ),
+    }),
+  },
   'library.history': {
     input: z.object({ id: itemId }),
     output: z.array(z.object({ rev: z.string(), summary: z.string(), timestamp: z.string() })),
+  },
+  /** The item as it was at a revision, so History can diff before it restores. Never writes. */
+  'library.at': {
+    input: z.object({ id: itemId, rev: z.string().max(64) }),
+    output: libraryItemSchema,
   },
   'library.restore': {
     input: z.object({ id: itemId, rev: z.string().max(64) }),
@@ -241,7 +255,16 @@ export const ipcContract = {
 
   // ---------- compile preview ----------
   'compile.preview': {
-    input: z.object({ id: itemId, target: targetRefSchema }),
+    input: z.object({
+      id: itemId,
+      target: targetRefSchema,
+      /**
+       * Unsaved editor state. With it, the preview shows what the tool *would* receive without
+       * committing anything to the library first; the draft is resolved against the saved
+       * library so its references still embed.
+       */
+      draft: z.object({ manifest: z.record(z.string(), z.unknown()), body: z.string() }).optional(),
+    }),
     output: z.object({ files: z.array(compiledFileSchema) }),
   },
 

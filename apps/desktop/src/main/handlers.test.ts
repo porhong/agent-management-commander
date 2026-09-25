@@ -221,6 +221,33 @@ describe('targets, preview, and deploy handlers', () => {
     expect(existsSync(join(home, '.claude'))).toBe(false);
   });
 
+  it('previews an unsaved draft without committing it to the library', async () => {
+    await seed();
+    const saved = await h['library.get']({ id: 'agent.rev' });
+    const { files } = await h['compile.preview']({
+      id: 'agent.rev',
+      target: { toolId: 'claude-code', scope: 'global' },
+      draft: {
+        manifest: { ...saved.manifest, description: 'Only in the editor.' },
+        body: 'Draft body.\n',
+      },
+    });
+    expect(files[0]!.content).toContain('Only in the editor.');
+    expect(files[0]!.content).toContain('Draft body.');
+    // The equipped skill still resolves, and the library itself is untouched.
+    expect(files[0]!.content).toContain('skills:\n  - sec\n');
+    expect((await h['library.get']({ id: 'agent.rev' })).body).toBe('You review.\n');
+  });
+
+  it('reads an item at an older revision without changing the working tree', async () => {
+    await seed();
+    await h['library.update']({ id: 'skill.sec', body: '# Sec v2\n' });
+    const [, first] = await h['library.history']({ id: 'skill.sec' });
+    const older = await h['library.at']({ id: 'skill.sec', rev: first!.rev });
+    expect(older.body).toBe('# Sec\n');
+    expect((await h['library.get']({ id: 'skill.sec' })).body).toBe('# Sec v2\n');
+  });
+
   it('plans, applies, and keeps the plan in main (the renderer only sees a planId)', async () => {
     await seed();
     const plan = await h['deploy.plan']({

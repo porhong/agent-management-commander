@@ -1,98 +1,90 @@
-import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import type { ChannelOutput } from '../../shared/ipc-contract';
-
-type Status = ChannelOutput<'system.status'>;
-type Rows = ChannelOutput<'library.list'>;
-type Targets = ChannelOutput<'targets.list'>;
+import { Navigate, RouterProvider, createHashRouter, type RouteObject } from 'react-router';
+import { AppShell } from '@/components/app-shell';
+import { LibraryList } from '@/routes/library-list';
+import { ItemEditor } from '@/routes/item';
+import { ComingSoon, Dashboard } from '@/routes/placeholder';
 
 /**
- * M1.5 shell: proves the IPC surface, the index, and the event bus end to end.
- * The real library UI arrives in M1.6.
+ * A data router, not `<Routes>`: the item editor uses `useBlocker` to hold a navigation while it
+ * asks about unsaved changes, and only a data router can do that.
  */
+export const routes: RouteObject[] = [
+  {
+    path: '/',
+    element: <AppShell />,
+    children: [
+      { index: true, element: <Dashboard /> },
+      { path: 'library/:kind', element: <LibraryList /> },
+      { path: 'item/:id', element: <ItemEditor /> },
+      {
+        path: 'targets',
+        element: (
+          <ComingSoon
+            title="Targets"
+            milestone="M1.7"
+            blurb="Every tool and scope AMC can deploy to, plus the projects you register."
+          />
+        ),
+      },
+      {
+        path: 'matrix',
+        element: (
+          <ComingSoon
+            title="Deployment matrix"
+            milestone="M1.7"
+            blurb="Which item is installed in which tool, and whether it is current."
+          />
+        ),
+      },
+      {
+        path: 'history',
+        element: (
+          <ComingSoon
+            title="Deploy history"
+            milestone="M1.7"
+            blurb="Every deploy, what it changed, and a way back."
+          />
+        ),
+      },
+      {
+        path: 'deploy',
+        element: (
+          <ComingSoon
+            title="Deploy"
+            milestone="M1.7"
+            blurb="Review the plan before anything is written."
+          />
+        ),
+      },
+      {
+        path: 'import',
+        element: (
+          <ComingSoon
+            title="Import"
+            milestone="M1.8"
+            blurb="Bring in what you already have. Import never changes your tool folders."
+          />
+        ),
+      },
+      {
+        path: 'settings',
+        element: (
+          <ComingSoon
+            title="Settings"
+            milestone="M1.9"
+            blurb="Library location, theme, and how deploys are confirmed."
+          />
+        ),
+      },
+      { path: '*', element: <Navigate to="/" replace /> },
+    ],
+  },
+];
+
+let router: ReturnType<typeof createHashRouter> | undefined;
+
 export function App() {
-  const [status, setStatus] = useState<Status | null>(null);
-  const [items, setItems] = useState<Rows>([]);
-  const [targets, setTargets] = useState<Targets>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [events, setEvents] = useState<string[]>([]);
-
-  async function refresh() {
-    const [s, list, t] = await Promise.all([
-      window.amc.system.status(),
-      window.amc.library.list({}),
-      window.amc.targets.list(),
-    ]);
-    if (!s.ok) return setError(`${s.error.code}: ${s.error.message}`);
-    if (!list.ok) return setError(`${list.error.code}: ${list.error.message}`);
-    if (!t.ok) return setError(`${t.error.code}: ${t.error.message}`);
-    setStatus(s.value);
-    setItems(list.value);
-    setTargets(t.value);
-    setError(null);
-  }
-
-  useEffect(() => {
-    void refresh();
-    return window.amc.on((event) => setEvents((prev) => [`${event.name}`, ...prev].slice(0, 5)));
-  }, []);
-
-  return (
-    <main className="min-h-screen bg-background p-8 text-foreground">
-      <h1 className="text-2xl font-semibold">Agent Management Commander</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {status
-          ? `${status.counts.items} items · ${status.counts.targets} targets · ${status.home}`
-          : 'Starting…'}
-      </p>
-
-      <div className="mt-6 flex gap-2">
-        <Button onClick={() => void refresh()}>Refresh</Button>
-        <Button
-          variant="secondary"
-          onClick={() => void window.amc.index.rebuild().then(() => refresh())}
-        >
-          Rebuild index
-        </Button>
-      </div>
-
-      {error && <p className="mt-4 font-mono text-sm text-destructive">{error}</p>}
-      {status?.warnings.map((w) => (
-        <p key={w} className="mt-2 font-mono text-sm text-muted-foreground">
-          {w}
-        </p>
-      ))}
-
-      <section className="mt-8 grid gap-8 md:grid-cols-2">
-        <div>
-          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-            Library
-          </h2>
-          <ul className="mt-2 space-y-1 font-mono text-sm">
-            {items.map((i) => (
-              <li key={i.id}>
-                {i.id} <span className="text-muted-foreground">v{i.version}</span>
-              </li>
-            ))}
-            {items.length === 0 && <li className="text-muted-foreground">No items yet.</li>}
-          </ul>
-        </div>
-        <div>
-          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-            Targets
-          </h2>
-          <ul className="mt-2 space-y-1 font-mono text-sm">
-            {targets.map((t) => (
-              <li key={t.targetId}>{t.label}</li>
-            ))}
-          </ul>
-          {events.length > 0 && (
-            <p className="mt-4 font-mono text-xs text-muted-foreground">
-              events: {events.join(', ')}
-            </p>
-          )}
-        </div>
-      </section>
-    </main>
-  );
+  // Hash routing: the packaged app is loaded from file://, which has no history server.
+  router ??= createHashRouter(routes);
+  return <RouterProvider router={router} />;
 }

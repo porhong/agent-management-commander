@@ -37,6 +37,7 @@ Bun workspaces monorepo (Bun is the package manager and script runner). The tool
 - **SQLite is the built-in `node:sqlite`.** Don't add native modules like better-sqlite3: they need an MSVC toolchain that isn't installed.
 - Workspace packages export TypeScript source (`"exports": "./src/index.ts"`). `electron.vite.config.ts` must list them in `externalizeDeps.exclude` so they get bundled.
 - The desktop package is CommonJS output (no `"type": "module"`) because the sandboxed preload can't be ESM.
+- **The renderer's code editor is CodeMirror 6, not Monaco**, although the plan first named Monaco. Monaco's language services need web workers, and the renderer loads from `file://` under `script-src 'self'`, where a worker cannot be constructed. Don't swap it back without solving that first.
 - `fixtures/**` are byte-exact test data (`-text` in `.gitattributes`, and Prettier ignores them). Don't reformat them.
 
 ## Architecture (the big picture)
@@ -74,6 +75,7 @@ Bun workspaces monorepo (Bun is the package manager and script runner). The tool
   - Every IPC channel is declared in `apps/desktop/src/shared/ipc-contract.ts` and Zod-validated in main. Adding a channel means adding it to `shared/channels.ts` too (a test keeps the two in step), because the sandboxed preload builds `window.amc` from that plain list and must stay Zod-free.
   - There is no generic filesystem channel, and **the renderer never passes a path**: folders come from `dialog.pickFolder` as an opaque token that only `main/path-tokens.ts` can resolve.
   - Deploy plans live in main (`AppServices.plans`); the renderer only ever holds a `planId`.
+- **The renderer is a data router.** `App.tsx` exports `routes`; `createHashRouter` wraps them (`createMemoryRouter` in tests). It has to be a data router because the item editor's unsaved-changes guard uses `useBlocker`. `AppShell` is the layout route and owns the palette, the New dialog, and the theme.
 - **App wiring:** `main/app-services.ts` builds core services from `~/.amc`, `main/handlers.ts` maps contract channels to them (no Electron imports, so it is unit-tested), and `main/ipc-router.ts` is the only Electron binding. Heavy library scans run in a `utilityProcess` (`main/worker/`) that falls back in-process.
 - **The index (`packages/core/src/index-store/`) is a cache.** Deployments and the deploy matrix are derived from the mirrored lockfiles, so a rebuild reproduces them; an outdated schema is dropped, never migrated.
 
