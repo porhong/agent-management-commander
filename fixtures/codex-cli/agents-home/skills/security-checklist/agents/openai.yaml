@@ -1,0 +1,5 @@
+interface:
+  display_name: Security Checklist
+  short_description: Security review checklist
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,3 @@
+* text=auto eol=lf
+# Fixtures must keep their exact bytes (CRLF fixtures are intentional)
+fixtures/** -text

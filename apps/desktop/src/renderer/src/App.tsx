@@ -1,0 +1,42 @@
+import { Navigate, RouterProvider, createHashRouter, type RouteObject } from 'react-router';
+import { AppShell } from '@/components/app-shell';
+import { Dashboard } from '@/routes/dashboard';
+import { Deploy } from '@/routes/deploy';
+import { DeployHistory } from '@/routes/deploy-history';
+import { Import } from '@/routes/import';
+import { LibraryList } from '@/routes/library-list';
+import { Matrix } from '@/routes/matrix';
+import { Settings } from '@/routes/settings';
+import { Targets } from '@/routes/targets';
+import { ItemEditor } from '@/routes/item';
+
+/**
+ * A data router, not `<Routes>`: the item editor uses `useBlocker` to hold a navigation while it
+ * asks about unsaved changes, and only a data router can do that.
+ */
+export const routes: RouteObject[] = [
+  {
+    path: '/',
+    element: <AppShell />,
+    children: [
+      { index: true, element: <Dashboard /> },
+      { path: 'library/:kind', element: <LibraryList /> },
+      { path: 'item/:id', element: <ItemEditor /> },
+      { path: 'targets', element: <Targets /> },
+      { path: 'matrix', element: <Matrix /> },
+      { path: 'history', element: <DeployHistory /> },
+      { path: 'deploy', element: <Deploy /> },
+      { path: 'import', element: <Import /> },
+      { path: 'settings', element: <Settings /> },
+      { path: '*', element: <Navigate to="/" replace /> },
+    ],
+  },
+];
+
+let router: ReturnType<typeof createHashRouter> | undefined;
+
+export function App() {
+  // Hash routing: the packaged app is loaded from file://, which has no history server.
+  router ??= createHashRouter(routes);
+  return <RouterProvider router={router} />;
+}

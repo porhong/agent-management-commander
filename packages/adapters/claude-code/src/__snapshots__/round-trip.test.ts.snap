@@ -1,0 +1,227 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Claude Code adapter: fixtures > produces reviewed canonical manifests (golden) 1`] = `
+"# agents/code-reviewer.md
+id: agent.code-reviewer
+kind: agent
+name: code-reviewer
+slug: code-reviewer
+version: 0.1.0
+description: Reviews code for correctness, security and style. Use proactively after code changes.
+model:
+  preferred: powerful
+tools:
+  allow:
+    - read
+    - search
+skills:
+  - ref: skill.security-checklist
+    mode: always
+  - ref: skill.style-guide
+    mode: always
+compat:
+  overrides:
+    claude-code:
+      raw:
+        color: purple
+--- body ---
+You are a senior code reviewer.
+
+## Process
+1. Read the diff.
+2. Check correctness first, then security.
+
+==========
+# agents/crlf-agent.md
+id: agent.crlf-agent
+kind: agent
+name: crlf-agent
+slug: crlf-agent
+version: 0.1.0
+description: Agent file saved on Windows with CRLF line endings.
+tools:
+  allow:
+    - read
+--- body ---
+Line one.
+Line two.
+
+==========
+# agents/data/db-expert.md
+id: agent.db-expert
+kind: agent
+name: db-expert
+slug: db-expert
+version: 0.1.0
+description: "PostgreSQL specialist: schema design, query plans, migrations."
+tools:
+  allow:
+    - read
+    - shell
+    - mcp:postgres
+  deny:
+    - write
+    - edit
+compat:
+  overrides:
+    claude-code:
+      raw:
+        permissionMode: plan
+        maxTurns: 20
+        effort: high
+      path: data/db-expert.md
+      tools:
+        - Read
+        - Bash(psql *)
+        - mcp__postgres__query
+      model: claude-sonnet-5
+--- body ---
+You are a database expert. Never run destructive statements.
+
+==========
+# agents/legacy.md
+id: agent.legacy-helper
+kind: agent
+name: Legacy Helper
+slug: legacy-helper
+version: 0.1.0
+description: 'Helps with legacy code: explains old patterns, suggests "safe" refactors.'
+compat:
+  overrides:
+    claude-code:
+      name: Legacy Helper
+      path: legacy.md
+--- body ---
+Explain before changing anything.
+
+==========
+# commands/commit.md
+id: command.commit
+kind: command
+name: commit
+slug: commit
+version: 0.1.0
+description: Create a conventional commit
+compat:
+  overrides:
+    claude-code:
+      raw:
+        model: haiku
+        disable-model-invocation: true
+--- body ---
+## Context
+
+- Status: !\`git status --short\`
+- Conventions: @CONTRIBUTING.md
+
+Write a conventional commit message and commit.
+
+==========
+# commands/frontend/component.md
+# warnings: description missing; derived from first line of body
+id: command.component
+kind: command
+name: component
+slug: component
+version: 0.1.0
+description: Create a new React component named $ARGUMENTS following the project conventions.
+compat:
+  overrides:
+    claude-code:
+      path: frontend/component.md
+      derivedDescription: true
+--- body ---
+Create a new React component named {{args}} following the project conventions.
+
+==========
+# commands/review-pr.md
+id: command.review-pr
+kind: command
+name: review-pr
+slug: review-pr
+version: 0.1.0
+description: Review a pull request for correctness and security
+allowedTools:
+  - shell
+  - read
+arguments:
+  - name: arg2
+    required: false
+  - name: arg3
+    required: false
+compat:
+  overrides:
+    claude-code:
+      raw:
+        argument-hint: "[pr-number] [focus]"
+      allowed-tools: Bash(git diff:*), Bash(gh pr view:*), Read
+--- body ---
+Review pull request {{arg2}} with focus on {{arg3}}.
+
+Full arguments: {{args}}
+
+Template engines use \\{{ double braces }} literally here; keep them intact.
+
+==========
+# skills/security-checklist/SKILL.md
+id: skill.security-checklist
+kind: skill
+name: security-checklist
+slug: security-checklist
+version: 0.1.0
+description: Use when reviewing code for security issues such as injection, authz gaps, secrets and unsafe deserialization.
+license: MIT
+allowedTools:
+  - read
+  - search
+  - shell
+compat:
+  overrides:
+    claude-code:
+      raw:
+        when_to_use: reviewing pull requests, touching auth code
+        metadata:
+          owner: security-team
+          reviewed: 2026-09-01
+      allowed-tools: Read Grep Bash(git diff:*)
+--- body ---
+# Security checklist
+
+- [ ] Inputs validated
+- [ ] No secrets in code — run \`scripts/scan-secrets.ps1\`
+- See [OWASP notes](references/owasp.md)
+
+==========
+# skills/style-guide/SKILL.md
+id: skill.style-guide
+kind: skill
+name: style-guide
+slug: style-guide
+version: 0.1.0
+description: "House style for TypeScript: naming, error handling, and module layout. Use when writing or reviewing TS code."
+--- body ---
+# Style guide
+
+Prefer named exports. Keep functions small.
+
+==========
+# skills/weird-body/SKILL.md
+id: skill.weird-body
+kind: skill
+name: weird-body
+slug: weird-body
+version: 0.1.0
+description: weird-body
+--- body ---
+---
+name: pasted-frontmatter
+description: This block is part of the body, not frontmatter.
+---
+
+Body text after a pasted block.
+
+---
+
+A horizontal rule above.
+"
+`;

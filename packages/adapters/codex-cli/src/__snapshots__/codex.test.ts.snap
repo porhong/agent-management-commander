@@ -1,0 +1,87 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Codex adapter: scan & parse (T1.3.5) > produces reviewed canonical manifests (golden) 1`] = `
+"# codex:agents/code-reviewer.toml
+id: agent.code-reviewer
+kind: agent
+name: code-reviewer
+slug: code-reviewer
+version: 0.1.0
+description: Reviews code for correctness, security and style.
+model:
+  preferred: powerful
+compat:
+  overrides:
+    codex-cli:
+      raw:
+        model_reasoning_effort: high
+      sandbox_mode: read-only
+--- body ---
+You are a senior code reviewer.
+
+1. Read the diff.
+2. Check correctness first, then security.
+
+==========
+# codex:agents/implementer.toml
+id: agent.implementer
+kind: agent
+name: implementer
+slug: implementer
+version: 0.1.0
+description: Implements an approved plan with small, tested commits.
+compat:
+  overrides:
+    codex-cli:
+      sandbox_mode: workspace-write
+--- body ---
+Implement the plan step by step. Run tests after each step.
+==========
+# codex:prompts/review-pr.md
+id: command.review-pr
+kind: command
+name: review-pr
+slug: review-pr
+version: 0.1.0
+description: Review a pull request for correctness and security
+arguments:
+  - name: pr
+    required: false
+  - name: focus
+    required: false
+compat:
+  overrides:
+    codex-cli:
+      raw:
+        argument-hint: PR=<number> [FOCUS=<area>]
+--- body ---
+Review pull request {{pr}} with focus on {{focus}}.
+
+All arguments: {{args}}. Cost is $5 per review (literal dollar).
+
+==========
+# agents:skills/repo-conventions/SKILL.md
+id: skill.repo-conventions
+kind: skill
+name: repo-conventions
+slug: repo-conventions
+version: 0.1.0
+description: Conventions for this repository. Use when adding modules or tests.
+--- body ---
+Tests live next to sources as \`*.test.ts\`.
+
+==========
+# agents:skills/security-checklist/SKILL.md
+id: skill.security-checklist
+kind: skill
+name: security-checklist
+slug: security-checklist
+version: 0.1.0
+description: Use when reviewing code for security issues such as injection, authz gaps, secrets and unsafe deserialization.
+--- body ---
+# Security checklist
+
+- [ ] Inputs validated
+- [ ] No secrets in code
+"
+`;

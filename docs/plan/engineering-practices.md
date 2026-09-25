@@ -6,7 +6,7 @@ These rules apply to every phase.
 
 | Area | Convention |
 |------|------------|
-| Package manager | pnpm workspaces. Node 22 LTS pinned in `.nvmrc` and `engines` |
+| Package manager | Bun workspaces (`packageManager` pins the Bun version). Tool CLIs and the app run on Node 24 LTS, pinned in `.nvmrc` and `engines` |
 | Language | TypeScript `strict`, `noUncheckedIndexedAccess`, ESM everywhere |
 | Boundaries | `packages/*` never import `electron` or anything from `apps/*` (lint-enforced). `adapters/*` depend only on `core` |
 | Naming | Files are `kebab-case.ts`. Types are `PascalCase`. Item IDs are `kind.slug` |
@@ -66,7 +66,7 @@ flowchart LR
 ```
 \* macOS joins in Phase 2.
 
-- Cache the pnpm store and Electron binaries.
+- Cache the Bun install cache and Electron binaries.
 - Signing secrets are available only to the tag workflow.
 - Every release attaches a `CHANGELOG.md` excerpt and a SHA-256 of each artifact.
 
@@ -92,7 +92,7 @@ These rules come from the core promise, "never lose a file". Each one is tested 
 - [ ] Paths from the renderer are only dialog-issued tokens or registered target IDs
 - [ ] Pack import: zip-slip test, script review, trust reset on hash change
 - [ ] Secret scanner on the library and on pack export
-- [ ] Dependency audit (`pnpm audit`) with no high or critical issues. Electron is on a supported major version
+- [ ] Dependency audit (`bun audit`) with no high or critical issues. Electron is on a supported major version
 - [ ] Signed binaries and a signed update feed
 
 ## 7. Performance budgets

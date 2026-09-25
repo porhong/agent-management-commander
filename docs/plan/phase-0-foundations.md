@@ -96,12 +96,30 @@ agent-management-commander/
 ├── fixtures/{claude-code,codex-cli}/ # real-world-shaped sample folders
 ├── docs/{concept,plan}/
 ├── .github/workflows/ci.yml
-├── pnpm-workspace.yaml
+├── package.json          # Bun workspaces
 ├── tsconfig.base.json
 └── eslint.config.js
 ```
 
-## 3. Exit criteria (all must hold)
+## 3. Outcome (2026-09-25)
+
+| Task | Result |
+|------|--------|
+| P0-01 | ✅ [claude-code/FORMAT.md](../../packages/adapters/claude-code/FORMAT.md) and fixtures |
+| P0-02 | ✅ [codex-cli/FORMAT.md](../../packages/adapters/codex-cli/FORMAT.md) and fixtures. **This changed the concept:** Codex has native TOML agents and native skills in the shared `~/.agents/skills`, and its custom prompts are deprecated |
+| P0-03 | ✅ The scaffold is in place, and the lint boundary rule is verified. **Deviations:** Node **24** LTS (not 22). TypeScript **6.0**, because typescript-eslint doesn't support TS 7 yet. Vite **7**, because electron-vite 5 needs it. **SQLite uses built-in `node:sqlite`**, because better-sqlite3 had no prebuilt binary and the machine has no MSVC toolchain. `node:sqlite` with FTS5 is verified in Node 24, in Electron 44, and in the packaged app (`AMC_SMOKE=1`). **Package manager switched from pnpm to Bun** (2026-09-25): Bun workspaces with the isolated linker, while Vitest and the tool CLIs still run on Node 24 |
+| P0-04 | ✅ `FsPort`, `NodeFs` (atomic write with Windows retry), and `MemFs` (op log). One contract suite runs against both |
+| P0-05 | ✅ Zod schemas and generated JSON Schema (`packages/core/schema/`). The description limit is 1,536 (Claude's), not 1,024, because real skills exceed 1,024. Model hints are abstract tiers |
+| P0-06 | ✅ `readItem`/`writeItem` with stable YAML. A property test shows write → read → write is byte-identical |
+| P0-07 | ✅ The Claude Code parse/compile round-trip passes for all fixtures and for the real `~/.claude` (4 skills, all Windows junctions into `~/.agents/skills`) |
+| P0-08 | ✅ Concept 03, 05, and 06 are updated. Q1, Q3, and Q5 are closed |
+
+Findings that feed Phase 1:
+- Skills reached through **junctions/symlinks** are common. `scan` marks them `linked`. The deployer must refuse to write through links (S4, using realpath), and import dedupe must spot shared targets.
+- `~/.agents/skills` is **shared by several tools**. Deploying there installs the skill for all of them, and the matrix must show that.
+- The first positional argument in Claude commands may be `$0` or `$1` (UNCONFIRMED). Round-trips keep the indices exactly, but named-argument mapping waits for verification in M1.3.
+
+## 4. Exit criteria (all must hold)
 
 1. The Claude Code and Codex formats are documented as verified, with fixtures.
 2. The round-trip test passes on the Claude Code fixtures and the real `~/.claude`.

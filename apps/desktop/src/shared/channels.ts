@@ -1,0 +1,52 @@
+/**
+ * Channel names as plain data, with no Zod import, so the sandboxed preload can build the
+ * `window.amc` surface without pulling the schemas in. A test asserts this list matches
+ * `ipcContract` exactly, so the two can never drift.
+ */
+export const CHANNEL_NAMES = [
+  'system.probe',
+  'system.diagnostics',
+  'system.status',
+  'system.reveal',
+  'system.relaunch',
+  'updates.check',
+  'updates.download',
+  'updates.install',
+  'status.drift',
+  'settings.get',
+  'settings.update',
+  'dialog.pickFolder',
+  'library.list',
+  'library.get',
+  'library.search',
+  'library.create',
+  'library.update',
+  'library.rename',
+  'library.duplicate',
+  'library.delete',
+  'library.relations',
+  'library.graph',
+  'library.history',
+  'library.at',
+  'library.restore',
+  'library.templates',
+  'library.validate',
+  'tools.detect',
+  'targets.list',
+  'targets.addProject',
+  'targets.removeProject',
+  'compile.preview',
+  'import.scan',
+  'import.adopt',
+  'deploy.plan',
+  'deploy.apply',
+  'deploy.history',
+  'deploy.report',
+  'deploy.planRollback',
+  'deploy.matrix',
+  'deploy.incomplete',
+  'deploy.recover',
+  'index.rebuild',
+] as const;
+
+export type ChannelName = (typeof CHANNEL_NAMES)[number];

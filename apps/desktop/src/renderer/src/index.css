@@ -1,0 +1,226 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * A dense developer-tool surface (docs/concept/04 §5). Colour is reserved for meaning: item
+ * kinds and sync status. Everything else is neutral, so a red dot always means the same thing.
+ * No web fonts: the app is offline and its CSP is `default-src 'self'`, so it uses the OS UI
+ * face and the monospace that ships with the platform.
+ */
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --surface: oklch(0.985 0 0);
+  --surface-raised: oklch(0.967 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.505 0 0);
+  --accent: oklch(0.955 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.555 0.21 27.3);
+  --border: oklch(0.912 0 0);
+  --input: oklch(0.912 0 0);
+  --ring: oklch(0.55 0.11 255);
+  --radius: 0.375rem;
+
+  /* Item kinds. Distinct hues that survive both themes and common colour-blindness. */
+  --kind-agent: oklch(0.52 0.17 288);
+  --kind-skill: oklch(0.55 0.12 70);
+  --kind-command: oklch(0.52 0.12 215);
+  --kind-workflow: oklch(0.5 0.13 155);
+
+  /* Sync status (docs/concept/03 §6). */
+  --status-in-sync: oklch(0.55 0.13 150);
+  --status-outdated: oklch(0.55 0.13 250);
+  --status-drifted: oklch(0.62 0.16 60);
+  --status-missing: oklch(0.55 0.21 27);
+  --status-foreign: oklch(0.6 0 0);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --background: oklch(0.165 0 0);
+    --foreground: oklch(0.96 0 0);
+    --surface: oklch(0.195 0 0);
+    --surface-raised: oklch(0.235 0 0);
+    --primary: oklch(0.93 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.27 0 0);
+    --secondary-foreground: oklch(0.96 0 0);
+    --muted: oklch(0.27 0 0);
+    --muted-foreground: oklch(0.68 0 0);
+    --accent: oklch(0.28 0 0);
+    --accent-foreground: oklch(0.96 0 0);
+    --destructive: oklch(0.68 0.18 22);
+    --border: oklch(1 0 0 / 12%);
+    --input: oklch(1 0 0 / 16%);
+    --ring: oklch(0.65 0.13 255);
+
+    --kind-agent: oklch(0.75 0.15 288);
+    --kind-skill: oklch(0.78 0.12 75);
+    --kind-command: oklch(0.75 0.12 215);
+    --kind-workflow: oklch(0.74 0.13 155);
+
+    --status-in-sync: oklch(0.75 0.15 150);
+    --status-outdated: oklch(0.72 0.13 250);
+    --status-drifted: oklch(0.78 0.15 65);
+    --status-missing: oklch(0.7 0.19 25);
+    --status-foreign: oklch(0.62 0 0);
+  }
+}
+
+/* The same overrides again for an explicit dark choice in Settings. */
+:root[data-theme='dark'] {
+  --background: oklch(0.165 0 0);
+  --foreground: oklch(0.96 0 0);
+  --surface: oklch(0.195 0 0);
+  --surface-raised: oklch(0.235 0 0);
+  --primary: oklch(0.93 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.27 0 0);
+  --secondary-foreground: oklch(0.96 0 0);
+  --muted: oklch(0.27 0 0);
+  --muted-foreground: oklch(0.68 0 0);
+  --accent: oklch(0.28 0 0);
+  --accent-foreground: oklch(0.96 0 0);
+  --destructive: oklch(0.68 0.18 22);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.65 0.13 255);
+
+  --kind-agent: oklch(0.75 0.15 288);
+  --kind-skill: oklch(0.78 0.12 75);
+  --kind-command: oklch(0.75 0.12 215);
+  --kind-workflow: oklch(0.74 0.13 155);
+
+  --status-in-sync: oklch(0.75 0.15 150);
+  --status-outdated: oklch(0.72 0.13 250);
+  --status-drifted: oklch(0.78 0.15 65);
+  --status-missing: oklch(0.7 0.19 25);
+  --status-foreign: oklch(0.62 0 0);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-agent: var(--kind-agent);
+  --color-skill: var(--kind-skill);
+  --color-command: var(--kind-command);
+  --color-workflow: var(--kind-workflow);
+
+  --color-in-sync: var(--status-in-sync);
+  --color-outdated: var(--status-outdated);
+  --color-drifted: var(--status-drifted);
+  --color-missing: var(--status-missing);
+  --color-foreign: var(--status-foreign);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+
+  --font-sans:
+    'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+  --font-mono: 'Cascadia Code', 'Cascadia Mono', Consolas, ui-monospace, 'SF Mono', monospace;
+
+  --text-xs: 0.6875rem;
+  --text-sm: 0.75rem;
+  --text-base: 0.8125rem;
+  --text-lg: 0.9375rem;
+  --text-xl: 1.125rem;
+  --text-2xl: 1.375rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/60;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground text-base antialiased;
+    font-family: var(--font-sans);
+    /* A desktop app: text is selected deliberately, not by dragging across the chrome. */
+    user-select: none;
+    overflow: hidden;
+  }
+  /* Selectable where content is actually content. */
+  input,
+  textarea,
+  [data-selectable] {
+    user-select: text;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-1;
+  }
+}
+
+@layer components {
+  /* Monospace for anything that is an identifier, a path, or file content. */
+  .id {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-variant-ligatures: none;
+  }
+
+  /*
+   * The platform checkbox is a heavy white block on a dark surface, which pulls the eye away
+   * from the item names. This one recedes until it is checked.
+   */
+  .check {
+    appearance: none;
+    width: 0.875rem;
+    height: 0.875rem;
+    border: 1px solid var(--muted-foreground);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    display: grid;
+    place-content: center;
+    flex: none;
+  }
+  .check::after {
+    content: '';
+    width: 0.5rem;
+    height: 0.5rem;
+    transform: scale(0);
+    background: var(--primary-foreground);
+    clip-path: polygon(14% 44%, 0 65%, 40% 100%, 100% 16%, 82% 0%, 37% 70%);
+  }
+  .check:checked {
+    background: var(--ring);
+    border-color: var(--ring);
+  }
+  .check:checked::after {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

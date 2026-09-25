@@ -30,6 +30,12 @@
 | T1.1.5 | Git history | `GitService` (isomorphic-git): init the repo, auto-commit on each save with the message `amc: update skill.security-checklist (1.3.0)`, `log(itemPath)`, `show(rev, path)`, `restore(rev, itemPath)` | History for one item lists only its commits. Restore creates a new commit |
 | T1.1.6 | Item templates | Built-in starter templates per kind (e.g. "Checklist skill", "Reviewer agent", "Slash command with args") as data in core | `create({ template })` yields a valid item |
 
+> **M1.1 outcome (2026-09-25):** done in `packages/core/src/library/` (`bootstrap.ts`, `service.ts`, `git.ts`, `templates.ts`, `versioning.ts`). Decisions beyond the table:
+> - `createdAt`/`updatedAt` live in `amc.yaml` as optional ISO fields. Metadata-only fields (`tags`, `author`, `license`, timestamps) never bump the version. Rename counts as a content change (it changes deployed file names), so it bumps patch.
+> - A freed slug gets a suffixed id (`skill.sec-2`) if a renamed item still holds `skill.sec`.
+> - Each commit carries an `Amc-Item: <id>` trailer. `history(id)` filters on it, so an item's history survives renames. `restore` lives in `LibraryService`: it finds the item at the old revision by id (not by folder), keeps the current slug, and writes a new version.
+> - `LibraryService` depends on a `LibraryHistory` interface (`NoHistory` for `MemFs` tests). `GitService` is the only core code that touches disk without `FsPort`, because isomorphic-git needs a node-style fs client.
+
 ## M1.2: Resolver & validator
 
 | ID | Task | Deliverables | Acceptance |
@@ -40,6 +46,13 @@
 | T1.2.4 | Validator framework | `Rule { id, severity, check(ctx) → Issue[] }`. Issues carry `itemId`, `path` (field), `targetId?`, message, and optional `fix` | Rules can be registered by adapters (per-target rules) |
 | T1.2.5 | Initial rules | The rules in [concept 05 §6](../concept/05-architecture.md#6-validation-rules-initial-set) **plus** the secret scanner (regex set for common key formats) and the path-safety check on slugs | Each rule has passing and failing fixtures |
 
+> **M1.2 outcome (2026-09-25):** done in `packages/core/src/resolver/` and `packages/core/src/validator/`. Decisions beyond the table:
+> - Edge relations are `equips`, `delegates-to`, `uses-agent`, `preloads`, and `depends-on`. Each edge carries its manifest field path (`skills.1.ref`), so issues point at the field and the "remove reference" fix drops only that entry.
+> - `resolveClosure` throws `REF_BROKEN`/`REF_CYCLE`. Callers run the validator first to get the same problems as issues. Shared dependencies are the same `ResolvedItem` object.
+> - Issues carry `blocking`: always true for errors, and also true for untrusted skill scripts, which are a warning that blocks deploy. A fix is data (`{ itemId, fields }`) applied through `LibraryService.update`.
+> - Per-tool rules come from factories that adapters register in M1.3: `descriptionLimitRule(toolId, limit, severity)` and `slugNamingRule(toolId, check)`. The core path-safety rule rejects Windows device names (`con`, `nul`, `lpt1`, …), which pass the slug regex.
+> - The inline-size threshold is 40,000 characters (body + always-on skills + their dependencies). `unused-item` runs only when deploy data is passed in, which happens once M1.4 exists.
+
 ## M1.3: Adapters (Claude Code, Codex CLI)
 
 | ID | Task | Deliverables | Acceptance |
@@ -48,10 +61,17 @@
 | T1.3.2 | Claude Code: detect | Find `~/.claude` (respect `CLAUDE_CONFIG_DIR` if set), try `claude --version` (timeout 3s, optional) | Works when the CLI isn't on `PATH` but the folder exists |
 | T1.3.3 | Claude Code: compile | Agent → `agents/<slug>.md`. Skill → `skills/<slug>/SKILL.md` plus copied `references/` and `scripts/`. Command → `commands/<slug>.md` with `{{args}}` → `$ARGUMENTS`. Tool and model mapping tables | Golden snapshot tests for every fixture item |
 | T1.3.4 | Claude Code: scan & parse | Enumerate native files for a scope. Parse into canonical drafts, putting unknown frontmatter into `compat.overrides.claude-code.raw` | Round-trip test from P0-07 is extended and still green |
-| T1.3.5 | Codex: detect / compile / scan / parse | Per the P0-02 findings. The degradations are expected to include agent → persona prompt or `AGENTS.md` section, and tool permissions → dropped with a warning | Golden tests. Every degradation appears in `adaptations[]` |
+| T1.3.5 | Codex: detect / compile / scan / parse | Per [codex-cli/FORMAT.md §7](../../packages/adapters/codex-cli/FORMAT.md): native TOML agents (`smol-toml`), skills in the shared `~/.agents/skills`, deprecated prompts at global scope, project commands compiled as skills, `sandbox_mode` as the only permission control | Golden tests. Every degradation appears in `adaptations[]` |
 | T1.3.6 | Managed `AGENTS.md` sections | If Codex needs content inside a **shared** file such as `AGENTS.md`, AMC writes only between markers `<!-- amc:begin <id> -->…<!-- amc:end <id> -->` and never touches text outside them | Tests: user text above, below, and between blocks survives compile → apply → re-apply |
 | T1.3.7 | Project scope | `paths(scope)` for the project scope of both tools. `Target = { toolId, scope: 'global' } \| { toolId, scope: 'project', root }` | A project target writes only under its root |
 
+> **M1.3 outcome (2026-09-25):** SDK in `packages/core/src/adapter/`; adapters in `packages/adapters/{claude-code,codex-cli}`. Decisions beyond the table:
+> - **Multi-root targets.** `paths(target)` returns named roots, and each `CompiledFile`/`NativeGroup` names its root. Codex needs two roots (`~/.codex` and `~/.agents`); Claude Code has one. The deployer (M1.4) keeps one lockfile per root. `~/.agents` can be shared by several tools' targets.
+> - **Adapter inputs.** Adapters are built from an injected `AdapterHost` (`fs`, `home`, `env`, `runVersion`), so detection and scanning are testable. `compile(ResolvedItem, Target)` replaced `compile(LibraryItem)`, so compiled output uses a referenced item's *current* slug after a rename.
+> - **Canonical positional placeholders are 1-based** (`{{arg1}}` is the first argument). Claude Code's `$N` is confirmed 0-based, so `$0` ↔ `{{arg1}}`. The old compile emitted 1-based `$N` for named arguments, which was off by one. Claude named arguments are now native (`arguments:` + `$name`).
+> - **T1.3.6** provides the mechanism (`spliceRegion`/`readRegion`/`listRegions`, and `CompiledFile.region`), with property tests for S7. No Phase 1 compile output needs a region yet, since always-on skills are inlined into agent TOML. Broken markers raise `REGION_MALFORMED` instead of being guessed at.
+> - **New rules:** `template-placeholders` (core); `claude-code:skill-listing-length`; `description-limit:codex-cli:skill` and `codex-cli:project-command-as-skill`.
+>
 > **Note on T1.3.6:** ownership is tracked at the **file** level in the concept docs. Shared files need **region-level ownership**. The lockfile records `{ kind: "region", markerId, sha256 }` for these entries.
 
 ## M1.4: Deployer
@@ -88,6 +108,16 @@ interface TargetPlan {
 }
 ```
 
+> **M1.4 outcome (2026-09-25):** done in `packages/core/src/deploy/` (`lockfile.ts`, `planner.ts`, `service.ts`). Tests cover S1 (property), S2, S3, S4 (including a real Windows junction), S5, S7, and S8 (crash after 0–3 writes → rollback or complete). Decisions beyond the table:
+> - **Lockfiles.** One `.amc-lock.json` per target *root*. Entries carry `targetId`, and managed regions live under `regions[relPath][id]`. The concept-doc layout without `schemaVersion` migrates to v1. A newer schema counts as corrupt, which means no writes.
+> - **Desired state.** `plan()` takes the **full desired item set** per target (the closure is added automatically), not a delta. A selection that fails to resolve makes the target `needs-attention` with no changes, so a broken reference can never turn into "delete everything".
+> - **Conflicts.** A byte-identical foreign file is adopted as `unchanged` (no write). A drifted file that is no longer selected is a `drifted` conflict, never a silent delete. A path whose realpath leaves the root is a `linked` conflict with `skip` as the only option. Apply re-checks realpath before any write.
+> - **S1 and regions.** S1 applies to whole files. Creating a managed region inside an existing shared file is a normal `create`: S7 guarantees the bytes outside the markers.
+> - **Rollback** restores files byte-for-byte and restores lock entries one by one, so lockfile edits by later deploys don't block it. Only the rolled-back files themselves must be untouched (S3).
+> - **Snapshot pruning** deletes a snapshot only when it is beyond the newest 50 **and** older than 30 days. The latest snapshot and those of unfinished deploys are always kept.
+> - **Deferred to M1.5 (index):** mirroring lockfiles into SQLite, recovering a deleted lockfile from the index, and storing `DeploymentRecord` rows. `apply` already returns the records.
+> - Deletes remove folders left empty, strictly inside the root.
+
 ## M1.5: Desktop shell, IPC, index
 
 | ID | Task | Deliverables | Acceptance |
@@ -99,6 +129,15 @@ interface TargetPlan {
 | T1.5.5 | Worker offload | Scans, rebuilds, and plan computation run in an Electron `utilityProcess`, with progress events | The UI stays at 60fps during a 1,000-item rebuild (manual perf check) |
 | T1.5.6 | Settings & logging | `settings.json` (Zod-validated), rotating log files in `~/.amc/logs`, and a "Copy diagnostics" action | Logs never contain file *contents*, only paths and hashes |
 | T1.5.7 | Mock API | `renderer/src/mocks/amc-mock.ts` implementing the contract with fixture data, enabled by `VITE_AMC_MOCK=1` | UI track can develop without a real core |
+
+> **M1.5 outcome (2026-09-25):** index in `packages/core/src/index-store/`; settings and logging in `packages/core/src/{settings,log}/`; the app layer in `apps/desktop/src/{shared,main,preload}/`. Decisions beyond the table:
+> - **No path ever crosses IPC.** A folder is chosen with `dialog.pickFolder`, which returns an opaque `tok_<32 hex>`; `PathTokenRegistry` in main is the only thing that can turn it back into a path. Project targets are addressed by token, and every id/slug is regex-validated at the boundary.
+> - **Plans stay in main.** `deploy.plan` returns a `planId`; `deploy.apply` takes only that id, so the renderer can't hand-craft a plan. Applying consumes the id, and only the last 20 plans are kept.
+> - **The preload is schema-free.** It builds `window.amc` from `shared/channels.ts` (plain strings), so Zod never reaches the sandboxed preload (bundle: 1.4 kB). A test asserts that list equals the contract's channels.
+> - **The index is derived, never authoritative.** Deployments and the matrix are recomputed from the lockfile mirror, so `rebuild()` always reproduces them. An outdated schema is dropped and rebuilt rather than migrated. `DeployService` now takes a `lockMirror`, which closes the T1.4.1 gap: a deleted lockfile puts the target on hold, with `restoreLockfile` / `forgetLockfile` as the two ways out.
+> - **Worker offload** runs library loading in a `utilityProcess` and falls back in-process when it can't start, dies, or times out. Verified in real Electron: `AMC_SMOKE=1` with `AMC_HOME` set reports `{"ok":true,"items":2,"fallbacks":[]}`, and CI now asserts that.
+> - **Logs hold paths and hashes only:** field names like `content`, `body`, `before` and `after` are replaced with `[redacted]`, and long values are truncated. Settings degrade to defaults rather than blocking startup.
+> - Found and fixed along the way: `NodeFs.rm` threw `EISDIR` on an empty directory while `MemFs` removed it. Both now match, with a contract test.
 
 ## M1.6: Library UI & item editor
 
@@ -113,6 +152,22 @@ interface TargetPlan {
 | T1.6.7 | Validation surface | Inline field errors, plus an issues panel with "Fix" actions where the rule provides one | Every rule from T1.2.5 renders correctly |
 | T1.6.8 | Relations & history tabs | Relations: plain lists of "uses" and "used by" (a graph view is deferred). History: git log, diff, and restore | Restore creates a commit and refreshes the editor |
 
+> **M1.6 progress (2026-09-25):** done. T1.6.1–T1.6.3 landed first (frame, list, palette), then T1.6.4–T1.6.8 (the editor). Decisions:
+> - **Visual direction** follows concept 04 §5 rather than inventing one: a dense developer-tool surface, monospace for ids and paths, colour reserved for the four item kinds and the five sync statuses. **No web fonts** — the app is offline under `default-src 'self'`, so it uses the OS UI face and Cascadia Code/Consolas.
+> - **Renderer tests run in jsdom** as a second Vitest project (`--project renderer`), with `@testing-library/react`. The node project still covers core, main, and shared.
+> - **Data access** is a ~100-line `useQuery`/`useAction` pair over the IPC contract, refreshed by `library.changed` events. A query library would be overhead for one source with no cache to invalidate.
+> - Added `library.graph`, so a list shows "used by" counts for every row in one call instead of N.
+> - `AMC_SCREENSHOT=<png>` (with optional `AMC_SCREENSHOT_ROUTE`) renders the app and exits, which is how the UI is reviewed without a visible desktop and how M1.10's E2E will capture screens.
+> - Found by the screenshot, not by the tests: `useQuery` passed `null` to channels declaring `z.void()`, which rejects it, so the dashboard silently showed zeros. Fixed, with a test that asserts void channels are called with no argument.
+>
+> Editor decisions (T1.6.4–T1.6.8):
+> - **CodeMirror 6, not Monaco.** Monaco puts its language services in web workers, and the renderer is loaded from `file://` under `script-src 'self'`, where a worker cannot be constructed. CodeMirror needs none, so highlighting and completion work under the app's real CSP, at a fraction of the bundle. `components/editor/code-editor.tsx` is the only place that knows this.
+> - **JSON Schema hints** are a documented field table (`lib/manifest-fields.ts`) offered as YAML completions. The generated schemas carry shapes but no prose, because they come from Zod; a test asserts the table lists exactly the keys each schema accepts, so the two cannot drift.
+> - **The app is now a data router** (`createHashRouter`), because `useBlocker` — the unsaved-changes guard — only works with one. The palette, the New dialog and the theme moved into `AppShell` so they sit inside the router.
+> - **The preview compiles the draft, not the saved item.** `compile.preview` gained an optional `draft`; main swaps it into the graph so its references still resolve, and the identity fields stay the saved ones. Nothing is written to preview an edit.
+> - **Added `library.at`**, a read-only “item at a revision”, so History can diff before it restores. “Compare with what is installed” reuses `deploy.plan`, which reads but never writes.
+> - The tab and form/YAML choice live in the URL (`?tab=…&mode=yaml`), so links and the back button work. Found by screenshot again: opening `?mode=yaml` directly left the manifest editor empty, because only the toggle seeded it.
+
 ## M1.7: Deploy UI
 
 | ID | Task | Deliverables | Acceptance |
@@ -122,6 +177,14 @@ interface TargetPlan {
 | T1.7.3 | Plan dialog | Grouped changes, per-file Monaco diff, adaptation list, conflict resolution controls, blocking issues, and "Apply" | Apply is disabled until conflicts are resolved. Shows a stale-plan error and a re-plan button |
 | T1.7.4 | Deployment matrix | Items × targets grid with status cells (in sync / outdated / missing / not deployed). Clicking a cell opens a plan | Uses a single index query and stays virtualized for 500 × 10 |
 | T1.7.5 | History | Deploy timeline, report detail (files, adaptations), and Revert (→ rollback plan) | Revert shows the plan like any other deploy |
+
+> **M1.7 progress (2026-09-25):** done. Decisions and findings:
+> - **A plan is declarative**, so a target ends up holding exactly what its selection names and anything else AMC put there is retired. Every entry point therefore starts from what is already deployed and adds to it (`lib/deploy.ts`); deploying one item must never quietly remove the rest. A test pins this.
+> - **One `PlanDialog` for every write.** The deploy screen, a matrix cell, removing a project's files, and Revert all build a `PlanRequest` and hand it to the same component, so there is one place where a change is reviewed and applied.
+> - **Registered project targets now carry a token.** `targets.list` returns the token main issued for each project root, because the renderer cannot turn a path back into one — without it, a project target could be listed but never deployed to. The renderer still never sends a path.
+> - **Added `deploy.report`**, which reads a past deploy's snapshot manifest. Adaptations are not stored in the snapshot, so the detail view says plainly that they are shown while planning.
+> - **Per-target auto-apply** is a `targetSettings` override on the global `autoApply`. Auto-apply only ever fires when the plan has no conflicts and no blocking issues.
+> - `AMC_TOOL_HOME` points the adapters at a throwaway home, so a real deploy in dev or E2E lands there instead of the user's `~/.claude`. Overriding `USERPROFILE` instead crashes Electron on Windows. `AMC_SCREENSHOT_CLICK` clicks a list of labels before capturing, which is how the plan dialog, a real apply, and a real revert were verified in the running app.
 
 ## M1.8: Import
 
@@ -133,6 +196,14 @@ interface TargetPlan {
 | T1.8.4 | Adopt | Write library items. Record the **existing** native files in the target lockfiles as-is (their current hash) | **Zero** bytes changed in target folders after adopt (safety test) |
 | T1.8.5 | Import wizard UI | Detect → Scan → Review (groups, conflicts in naming, suggestions with accept/reject) → Adopt → Summary | Can go back through steps. Cancel leaves no trace |
 
+> **M1.8 progress (2026-09-25):** done, in `packages/core/src/import/`. Decisions:
+> - **Adopt writes to the library and to nothing else (S6).** T1.8.4 also asks for the native files to be recorded in the target lockfiles, and those two pull in opposite directions. The resolution: importing writes only library items, and recording ownership is a separate, reviewable deploy offered at the end. The planner already turns a byte-identical file into an `unchanged` change that records its lock entry without rewriting it, so that plan changes no existing bytes — a test fingerprints every tool file before and after to prove it.
+> - **Dedupe is two passes**: the same kind and normalized slug first, then a merge of buckets whose canonical bodies hash the same or overlap by Jaccard ≥ 0.85 over two-line shingles. Short items are deliberately left apart: one different line out of three is a third of the item, not a copy.
+> - **Suggestions come only from prose.** A reference already declared in frontmatter is a real reference and is carried over on adopt, remapped if the user renamed the item; anything merely mentioned in the body is offered with the line it came from, unaccepted by default.
+> - Found while writing the tests: adopt dropped the references a native file already declared, so importing the Claude agent fixture silently lost its two skills. Fixed, with the mode (`always` in Claude's frontmatter) preserved.
+> - The renderer never sees a scan: `import.scan` returns a `scanId` and main holds the candidates, the same shape as deploy plans.
+> - Found by screenshot: `inputClass` is `w-full`, which beat the `w-56` on the slug box and pushed the description and controls out of the row.
+
 ## M1.9: Dashboard & onboarding
 
 | ID | Task | Deliverables | Acceptance |
@@ -140,6 +211,14 @@ interface TargetPlan {
 | T1.9.1 | Onboarding | Welcome → library location → tool detection → "Import now / later" → dashboard | Re-runnable from Settings. Never writes to tool folders |
 | T1.9.2 | Dashboard | Tool cards, health panel (broken refs, outdated deployments, missing owned files, foreign files, failed/incomplete deploys), recent activity | Each health item links to a fix action |
 | T1.9.3 | Periodic status check | On focus and every N minutes: hash owned files vs. lockfile → update statuses (a full watcher comes in Phase 2) | A manual edit in `~/.claude` shows up as "drifted" within one refresh |
+
+> **M1.9 progress (2026-09-25):** done. Every route is now real; the last `ComingSoon` placeholder is gone. Decisions:
+> - **Drift is its own read-only check** (`packages/core/src/status/drift.ts`): it hashes only what a lockfile claims, so a file AMC does not own is invisible to it — noticing those is Import's job. `useDrift` re-runs it on window focus and every five minutes, and the matrix lets what is on disk beat what the version numbers say.
+> - **The dashboard's health rows each carry one action**, and each one names something real: a blocking issue links to that item's Issues tab, an outdated deployment to a pre-filled deploy, a deleted file to the deploy that puts it back, an interrupted deploy to History.
+> - **Onboarding writes exactly one thing** — the `onboarded` flag — and only offers Import, which itself writes nothing to a tool folder. Re-runnable from Settings.
+> - **The library can live outside `~/.amc`** (`settings.libraryRoot`); state, snapshots and logs never move. Choosing a folder never copies or deletes: if it holds a library AMC uses it, if it is empty AMC starts one, and the old library stays where it is. It takes effect on restart, which Settings offers.
+> - Added `settings.changed`, because Settings could previously change the theme without the shell noticing.
+> - Copy caught by screenshot rather than tests: "1 problem stop a deploy", and a single drifted file described as "and others".
 
 ## M1.10: Hardening & release 0.1.0
 
@@ -151,6 +230,15 @@ interface TargetPlan {
 | T1.10.4 | Signing & updates | Authenticode signing (needs certificate), `electron-updater` with GitHub Releases | Update from 0.1.0-beta.1 → beta.2 works |
 | T1.10.5 | Docs | README (install, first run, concepts in 5 minutes) and a `CHANGELOG.md` | — |
 | T1.10.6 | License | **Blocked on Q6.** Add `LICENSE` and third-party notices (`license-checker`) | — |
+
+> **M1.10 progress (2026-09-25):** T1.10.1, T1.10.3, T1.10.5 and T1.10.6 are done. T1.10.4 is wired but unverified, and T1.10.2 has not started.
+> - **T1.10.1 E2E:** five journeys (J1, J2, J3, J5-lite, rollback) through Playwright's `_electron`, against a temp `AMC_HOME` and `AMC_TOOL_HOME`, ~17s for the suite. Added to CI on Windows. No browser download is needed, since `_electron` drives the app itself.
+> - **T1.10.3 Packaging:** the 0.1.0 NSIS installer builds and the packaged app smoke-boots clean. The icon is generated from the app's own palette by `build/make-icon.mjs`, so it cannot drift from the design tokens. Per-user install and `deleteAppDataOnUninstall: false` were already set; `~/.amc` is not under appData, so an uninstall cannot reach it.
+> - **T1.10.6 License:** MIT (Q6 answered by the owner). `scripts/third-party-notices.mjs` replaces `license-checker`, which cannot read Bun's isolated store: it walks the runtime closure from the workspace manifests, so build tooling is excluded by construction rather than by name. 164 packages, all permissive, no copyleft.
+> - **T1.10.4 Updates:** `electron-updater` against GitHub Releases, bundled into main (the packaged app ships `out/**` only). `autoDownload` is off and nothing installs without the user asking; the whole check is behind a `updates` setting, since it is the only network request AMC makes. Handler branches are tested through an injected `UpdaterPort`. **Signing and a real update still need a certificate and a published release.**
+> - **T1.10.2 Dogfood:** not started. It needs a week of real use, which no amount of testing substitutes for.
+> - Found by the E2E suite, not by the unit tests: reverting a deploy closed the dialog the moment it succeeded, so the report of what was reverted was never seen (the same bug in Import's "record what is installed"); and a conflict row never said *what* it was asking about, so a plan that would delete a drifted file offered "Overwrite" with no hint that overwriting meant removing it.
+> - `ELECTRON_RUN_AS_NODE` has to be **deleted** from a child environment, not set to `''`: Electron checks whether the variable exists, so an empty value still starts it as plain Node.
 
 ## Phase 1 exit criteria
 
