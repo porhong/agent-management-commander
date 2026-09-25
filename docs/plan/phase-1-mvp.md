@@ -212,6 +212,14 @@ interface TargetPlan {
 | T1.9.2 | Dashboard | Tool cards, health panel (broken refs, outdated deployments, missing owned files, foreign files, failed/incomplete deploys), recent activity | Each health item links to a fix action |
 | T1.9.3 | Periodic status check | On focus and every N minutes: hash owned files vs. lockfile → update statuses (a full watcher comes in Phase 2) | A manual edit in `~/.claude` shows up as "drifted" within one refresh |
 
+> **M1.9 progress (2026-09-25):** done. Every route is now real; the last `ComingSoon` placeholder is gone. Decisions:
+> - **Drift is its own read-only check** (`packages/core/src/status/drift.ts`): it hashes only what a lockfile claims, so a file AMC does not own is invisible to it — noticing those is Import's job. `useDrift` re-runs it on window focus and every five minutes, and the matrix lets what is on disk beat what the version numbers say.
+> - **The dashboard's health rows each carry one action**, and each one names something real: a blocking issue links to that item's Issues tab, an outdated deployment to a pre-filled deploy, a deleted file to the deploy that puts it back, an interrupted deploy to History.
+> - **Onboarding writes exactly one thing** — the `onboarded` flag — and only offers Import, which itself writes nothing to a tool folder. Re-runnable from Settings.
+> - **The library can live outside `~/.amc`** (`settings.libraryRoot`); state, snapshots and logs never move. Choosing a folder never copies or deletes: if it holds a library AMC uses it, if it is empty AMC starts one, and the old library stays where it is. It takes effect on restart, which Settings offers.
+> - Added `settings.changed`, because Settings could previously change the theme without the shell noticing.
+> - Copy caught by screenshot rather than tests: "1 problem stop a deploy", and a single drifted file described as "and others".
+
 ## M1.10: Hardening & release 0.1.0
 
 | ID | Task | Deliverables | Acceptance |

@@ -248,6 +248,30 @@ describe('targets, preview, and deploy handlers', () => {
     expect((await h['library.get']({ id: 'skill.sec' })).body).toBe('# Sec v2\n');
   });
 
+  it('sees a hand edit in a tool folder as drift, and a deleted file as missing (T1.9.3)', async () => {
+    await seed();
+    const plan = await h['deploy.plan']({
+      selections: [{ target: { toolId: 'claude-code', scope: 'global' }, items: ['agent.rev'] }],
+    });
+    await h['deploy.apply']({ planId: plan.planId });
+    expect(await h['status.drift']()).toMatchObject({ entries: [], warnings: [] });
+
+    // The sort of thing that happens when someone edits ~/.claude by hand.
+    const skill = join(home, '.claude', 'skills', 'sec', 'SKILL.md');
+    writeFileSync(skill, '# Sec, edited by hand\n');
+    expect((await h['status.drift']()).entries).toEqual([
+      expect.objectContaining({
+        state: 'drifted',
+        itemId: 'skill.sec',
+        relPath: 'skills/sec/SKILL.md',
+        targetId: 'claude-code:global',
+      }),
+    ]);
+
+    rmSync(skill);
+    expect((await h['status.drift']()).entries[0]).toMatchObject({ state: 'missing' });
+  });
+
   it('plans, applies, and keeps the plan in main (the renderer only sees a planId)', async () => {
     await seed();
     const plan = await h['deploy.plan']({

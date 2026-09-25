@@ -122,6 +122,37 @@ export const ipcContract = {
     }),
   },
 
+  /** Opens a folder AMC owns in the OS file manager. The renderer names it, never its path. */
+  'system.reveal': {
+    input: z.object({ what: z.enum(['home', 'library', 'logs']) }),
+    output: z.object({ opened: z.boolean() }),
+  },
+  /** Restarts the app, so a new library location takes effect. */
+  'system.relaunch': { input: z.void(), output: z.object({ relaunching: z.boolean() }) },
+
+  // ---------- status (T1.9.3) ----------
+  /**
+   * Hashes every file AMC owns against the lockfile. Read-only, and cheap enough to run when
+   * the window regains focus, so an edit made in a tool folder shows up as drift.
+   */
+  'status.drift': {
+    input: z.void(),
+    output: z.object({
+      checkedAt: z.string(),
+      warnings: z.array(z.string()),
+      entries: z.array(
+        z.object({
+          targetId: z.string(),
+          root: z.string(),
+          relPath: z.string(),
+          region: z.string().optional(),
+          itemId: z.string(),
+          state: z.enum(['in-sync', 'drifted', 'missing']),
+        }),
+      ),
+    }),
+  },
+
   // ---------- settings ----------
   'settings.get': { input: z.void(), output: z.record(z.string(), z.unknown()) },
   'settings.update': {
@@ -467,6 +498,8 @@ export const eventContract = {
     reason: z.enum(['create', 'update', 'rename', 'delete', 'restore', 'rebuild']),
   }),
   'targets.changed': z.object({ targetIds: z.array(z.string()) }),
+  /** Settings were written, so screens holding them (theme, onboarding) can catch up. */
+  'settings.changed': z.object({ keys: z.array(z.string()) }),
   'log.warning': z.object({ scope: z.string(), message: z.string() }),
 } as const;
 

@@ -67,7 +67,7 @@ beforeEach(() => {
           counts: { items: 3, targets: 2 },
         }),
     },
-    settings: { get: () => ok({ theme }) },
+    settings: { get: () => ok({ theme, onboarded: true }) },
     deploy: { matrix: () => ok([]) },
     tools: { detect: () => ok([]) },
     targets: { list: () => ok([]) },
@@ -127,23 +127,28 @@ describe('ipc calls', () => {
         search: () => ok([]),
         graph: () => ok({ edges: [] }),
         templates: () => ok([]),
+        validate: record({ issues: [] }),
       },
       system: {
         status: record({
           ready: true,
           home: 'C:/x',
           warnings: [],
-          counts: { items: 3, targets: 2 },
+          counts: { items: 3, deployments: 0, targets: 2 },
         }),
       },
-      settings: { get: record({ theme: 'system' }) },
-      deploy: { matrix: record([]) },
+      settings: { get: record({ theme: 'system', onboarded: true }) },
+      deploy: { matrix: record([]), history: record([]), incomplete: record([]) },
       tools: { detect: record([]) },
+      targets: { list: record([]) },
+      status: {
+        drift: record({ checkedAt: '2026-09-25T10:00:00.000Z', warnings: [], entries: [] }),
+      },
       index: { rebuild },
       on: () => () => {},
     };
     render(<RouterProvider router={createMemoryRouter(routes, { initialEntries: ['/'] })} />);
-    await screen.findByText(/3 items across 2 targets/);
+    await screen.findByText(/3 items · 0 deployments · 0 targets/);
     expect(seen.length).toBeGreaterThan(0);
     for (const args of seen) expect(args.filter((a) => a !== undefined)).toEqual([]);
   });

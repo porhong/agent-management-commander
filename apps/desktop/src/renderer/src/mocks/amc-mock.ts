@@ -115,6 +115,24 @@ const impl: Record<string, (input?: unknown) => Promise<{ ok: true; value: unkno
       counts: { items: ROWS.length, deployments: 3, targets: TARGETS.length },
     }),
 
+  'system.reveal': () => ok({ opened: true }),
+  'system.relaunch': () => ok({ relaunching: false }),
+
+  'status.drift': () =>
+    ok({
+      checkedAt: new Date().toISOString(),
+      warnings: [],
+      entries: [
+        {
+          targetId: 'claude-code:global',
+          root: 'claude',
+          relPath: 'skills/style-guide/SKILL.md',
+          itemId: 'skill.style-guide',
+          state: 'drifted',
+        },
+      ],
+    }),
+
   'settings.get': () =>
     ok({ schemaVersion: 1, theme: 'system', autoApply: 'ask', projectRoots: [], onboarded: true }),
   'settings.update': (input) =>

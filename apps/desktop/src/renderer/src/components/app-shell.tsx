@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { CommandPalette } from '@/components/command-palette';
 import { NewItemDialog } from '@/components/new-item-dialog';
+import { Onboarding } from '@/components/onboarding';
 import { useQuery } from '@/lib/ipc';
 import { EDITABLE_KINDS, KINDS, type EditableKind } from '@/lib/kinds';
 
@@ -62,7 +63,7 @@ function Section({ label, items }: { label: string; items: NavItem[] }) {
 export function AppShell() {
   const items = useQuery('library.list', {}, { on: ['library.changed'] });
   const status = useQuery('system.status', undefined, { on: ['library.changed'] });
-  const settings = useQuery('settings.get', undefined);
+  const settings = useQuery('settings.get', undefined, { on: ['settings.changed'] });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [newKind, setNewKind] = useState<EditableKind | null>(null);
   const navigate = useNavigate();
@@ -153,6 +154,10 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+
+      {settings.data !== undefined && settings.data['onboarded'] !== true && (
+        <Onboarding onDone={settings.reload} />
+      )}
 
       <CommandPalette open={paletteOpen} onClose={closePalette} onNewItem={setNewKind} />
 

@@ -115,7 +115,9 @@ beforeEach(() => {
       validate: () => ok({ issues: [] }),
     },
     system: { status: () => ok({ ready: true, home: 'C:/amc', warnings: [], counts: {} }) },
-    settings: { get: () => ok({ theme: 'system', autoApply: 'ask', targetSettings: {} }) },
+    settings: {
+      get: () => ok({ theme: 'system', autoApply: 'ask', targetSettings: {}, onboarded: true }),
+    },
     tools: { detect: () => ok([]) },
     targets: {
       list: () =>

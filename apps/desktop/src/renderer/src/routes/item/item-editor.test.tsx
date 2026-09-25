@@ -148,7 +148,7 @@ beforeEach(() => {
       status: () =>
         ok({ ready: true, home: 'C:/amc', warnings: [], counts: { items: 4, targets: 1 } }),
     },
-    settings: { get: () => ok({ theme: 'system' }) },
+    settings: { get: () => ok({ theme: 'system', onboarded: true }) },
     deploy: {
       matrix: () => ok([]),
       plan: () => ok({ planId: 'p1', kind: 'deploy', createdAt: '', issues: [], targets: [] }),

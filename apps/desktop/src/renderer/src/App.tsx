@@ -1,13 +1,14 @@
 import { Navigate, RouterProvider, createHashRouter, type RouteObject } from 'react-router';
 import { AppShell } from '@/components/app-shell';
+import { Dashboard } from '@/routes/dashboard';
 import { Deploy } from '@/routes/deploy';
 import { DeployHistory } from '@/routes/deploy-history';
 import { Import } from '@/routes/import';
 import { LibraryList } from '@/routes/library-list';
 import { Matrix } from '@/routes/matrix';
+import { Settings } from '@/routes/settings';
 import { Targets } from '@/routes/targets';
 import { ItemEditor } from '@/routes/item';
-import { ComingSoon, Dashboard } from '@/routes/placeholder';
 
 /**
  * A data router, not `<Routes>`: the item editor uses `useBlocker` to hold a navigation while it
@@ -26,16 +27,7 @@ export const routes: RouteObject[] = [
       { path: 'history', element: <DeployHistory /> },
       { path: 'deploy', element: <Deploy /> },
       { path: 'import', element: <Import /> },
-      {
-        path: 'settings',
-        element: (
-          <ComingSoon
-            title="Settings"
-            milestone="M1.9"
-            blurb="Library location, theme, and how deploys are confirmed."
-          />
-        ),
-      },
+      { path: 'settings', element: <Settings /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

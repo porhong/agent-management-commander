@@ -10,6 +10,11 @@ export const settingsSchema = z.object({
   theme: z.enum(['system', 'light', 'dark']).default('system'),
   /** Ask before applying a plan, or apply automatically when it has no conflicts. */
   autoApply: z.enum(['ask', 'when-no-conflicts']).default('ask'),
+  /**
+   * Where the library lives. Unset means `<amc home>/library`. Pointing it elsewhere never
+   * moves or deletes anything: the old library simply stays where it is.
+   */
+  libraryRoot: z.string().optional(),
   /** Registered project targets (absolute paths), shown alongside the global scopes. */
   projectRoots: z.array(z.string()).default([]),
   /** Per-target override of `autoApply`, keyed by target id. Absent means inherit. */

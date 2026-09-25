@@ -5,6 +5,7 @@ import {
   ITEM_TEMPLATES,
   Validator,
   buildGraph,
+  checkDrift,
   looksBinary,
   parseManifest,
   resolveClosure,
@@ -25,6 +26,12 @@ export interface DialogPort {
   pickFolder(title?: string): Promise<string | null>;
 }
 
+/** The two things only the shell can do, injected for the same reason. */
+export interface ShellPort {
+  openPath(path: string): Promise<boolean>;
+  relaunch(): void;
+}
+
 export type HandlerMap = {
   [C in Channel]: (input: ChannelInput<C>) => Promise<ChannelOutput<C>> | ChannelOutput<C>;
 };
@@ -33,6 +40,8 @@ export interface HandlerDeps {
   services: AppServices;
   dialog: DialogPort;
   probe: () => ChannelOutput<'system.probe'>;
+  /** Omitted in tests, where revealing a folder and restarting are both no-ops. */
+  shell?: ShellPort;
 }
 
 const toBase64 = (files: Record<string, Buffer>): Record<string, string> =>
@@ -71,7 +80,7 @@ function wireChange(c: PlannedChange) {
   };
 }
 
-export function createHandlers({ services, dialog, probe }: HandlerDeps): HandlerMap {
+export function createHandlers({ services, dialog, probe, shell }: HandlerDeps): HandlerMap {
   const { library, deploy, index, settings, logger, adapters, tokens } = services;
   const log = logger.child('ipc');
 
@@ -153,11 +162,43 @@ export function createHandlers({ services, dialog, probe }: HandlerDeps): Handle
       },
     }),
 
+    'system.reveal': async ({ what }) => {
+      const { home, library: libraryDir, logs } = services.paths;
+      const path = { home, library: libraryDir, logs }[what];
+      return { opened: (await shell?.openPath(path)) ?? false };
+    },
+
+    'system.relaunch': () => {
+      log.info('relaunching');
+      shell?.relaunch();
+      return { relaunching: shell !== undefined };
+    },
+
+    // ---------- status (T1.9.3) ----------
+    'status.drift': async () => {
+      const report = await checkDrift({ fs: services.fs, adapters }, services.targets());
+      return {
+        checkedAt: report.checkedAt,
+        warnings: report.warnings,
+        entries: report.entries
+          .filter((e) => e.state !== 'in-sync')
+          .map((e) => ({
+            targetId: e.targetId,
+            root: e.root,
+            relPath: e.relPath,
+            ...(e.region && { region: e.region }),
+            itemId: e.itemId,
+            state: e.state,
+          })),
+      };
+    },
+
     // ---------- settings ----------
     'settings.get': () => settings.get() as unknown as Record<string, unknown>,
     'settings.update': async ({ patch }) => {
       const next = await settings.update(patch as never);
       logger.level = next.logLevel;
+      services.emit('settings.changed', { keys: Object.keys(patch) });
       return next as unknown as Record<string, unknown>;
     },
 

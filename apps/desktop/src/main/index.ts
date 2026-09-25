@@ -1,9 +1,9 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { nodeAdapterHost } from '@amc/core';
-import { BrowserWindow, app, dialog, utilityProcess } from 'electron';
+import { BrowserWindow, app, dialog, shell, utilityProcess } from 'electron';
 import { createAppServices } from './app-services';
-import { createHandlers, type DialogPort } from './handlers';
+import { createHandlers, type DialogPort, type ShellPort } from './handlers';
 import { createEmitter, registerIpc } from './ipc-router';
 import { probeSqlite } from './sqlite-probe';
 import { createWindow } from './window';
@@ -25,6 +25,17 @@ const electronDialog: DialogPort = {
       properties: ['openDirectory', 'createDirectory'],
     });
     return result.canceled ? null : (result.filePaths[0] ?? null);
+  },
+};
+
+const electronShell: ShellPort = {
+  async openPath(path) {
+    // `openPath` resolves to '' on success and an error message otherwise.
+    return (await shell.openPath(path)) === '';
+  },
+  relaunch() {
+    app.relaunch();
+    app.exit(0);
   },
 };
 
@@ -94,7 +105,12 @@ if (!app.requestSingleInstanceLock()) {
     const log = services.logger.child('main');
 
     registerIpc(
-      createHandlers({ services, dialog: electronDialog, probe: systemProbe }),
+      createHandlers({
+        services,
+        dialog: electronDialog,
+        probe: systemProbe,
+        shell: electronShell,
+      }),
       (channel, err) =>
         log.error('ipc handler failed', {
           channel,

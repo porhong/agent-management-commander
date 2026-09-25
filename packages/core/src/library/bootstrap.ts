@@ -27,14 +27,18 @@ export function amcPaths(home: string = defaultAmcHome()): AmcPaths {
   };
 }
 
+/** Creates a library folder's shape. Idempotent; an existing library is left exactly as it is. */
+export async function bootstrapLibrary(fs: FsPort, root: string): Promise<void> {
+  await fs.mkdirp(root);
+  for (const kind of Object.keys(manifestSchemas) as ModeledKind[]) {
+    await fs.mkdirp(join(root, kindDir(kind)));
+  }
+}
+
 /** Creates any missing folders of the AMC home. Idempotent; never touches existing content. */
 export async function bootstrapHome(fs: FsPort, home?: string): Promise<AmcPaths> {
   const paths = amcPaths(home);
-  for (const dir of [paths.library, paths.state, paths.snapshots, paths.logs]) {
-    await fs.mkdirp(dir);
-  }
-  for (const kind of Object.keys(manifestSchemas) as ModeledKind[]) {
-    await fs.mkdirp(join(paths.library, kindDir(kind)));
-  }
+  for (const dir of [paths.state, paths.snapshots, paths.logs]) await fs.mkdirp(dir);
+  await bootstrapLibrary(fs, paths.library);
   return paths;
 }

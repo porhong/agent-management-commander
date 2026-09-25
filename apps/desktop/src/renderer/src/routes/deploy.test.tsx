@@ -108,7 +108,7 @@ const CONFLICT = {
 
 beforeEach(() => {
   planned = [];
-  settings = { theme: 'system', autoApply: 'ask', targetSettings: {} };
+  settings = { theme: 'system', autoApply: 'ask', targetSettings: {}, onboarded: true };
   matrix = [
     {
       itemId: 'skill.security-checklist',
@@ -339,6 +339,7 @@ describe('plan dialog (T1.7.3)', () => {
       theme: 'system',
       autoApply: 'ask',
       targetSettings: { 'claude-code:global': { autoApply: 'when-no-conflicts' } },
+      onboarded: true,
     };
     const user = userEvent.setup();
     await openPlan(user);
@@ -350,6 +351,7 @@ describe('plan dialog (T1.7.3)', () => {
       theme: 'system',
       autoApply: 'when-no-conflicts',
       targetSettings: {},
+      onboarded: true,
     };
     plan.mockImplementation(() => ok(planWith([CONFLICT])));
     const user = userEvent.setup();

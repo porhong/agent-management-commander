@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { PlanDialog, type PlanRequest } from '@/components/deploy/plan-dialog';
+import { useDrift } from '@/lib/drift';
 import { useQuery } from '@/lib/ipc';
 import { selectionFor } from '@/lib/deploy';
 import { metaOf, slugOf } from '@/lib/kinds';
@@ -18,6 +19,7 @@ export function Matrix() {
   const items = useQuery('library.list', {}, { on: ['library.changed'] });
   const targets = useQuery('targets.list', undefined, { on: ['targets.changed'] });
   const matrix = useQuery('deploy.matrix', undefined, { on: ['library.changed'] });
+  const drift = useDrift();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [request, setRequest] = useState<PlanRequest | null>(null);
 
@@ -26,8 +28,14 @@ export function Matrix() {
   const cells = useMemo(() => {
     const map = new Map<string, SyncStatus>();
     for (const row of matrix.data ?? []) map.set(`${row.itemId}|${row.targetId}`, row.status);
+    // What is on disk beats what the version numbers say: a file edited or deleted behind AMC
+    // is the more urgent truth, whichever version it claims to be (T1.9.3).
+    for (const entry of drift.data?.entries ?? []) {
+      const key = `${entry.itemId}|${entry.targetId}`;
+      if (map.has(key)) map.set(key, entry.state === 'missing' ? 'missing' : 'drifted');
+    }
     return map;
-  }, [matrix.data]);
+  }, [matrix.data, drift.data]);
 
   // An item deployed somewhere but no longer in the library still needs a row, or its files
   // would be invisible here — and those are exactly the ones worth cleaning up.
