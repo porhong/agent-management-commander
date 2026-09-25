@@ -33,6 +33,13 @@ const OP = {
   unchanged: { label: 'Unchanged', Icon: Check, color: 'text-muted-foreground' },
 } as const;
 
+/** What the plan wants to do to a conflicted path, so the choices below are not abstract. */
+const PENDING: Record<string, string> = {
+  create: 'AMC wants to put a file here.',
+  update: 'AMC wants to write its own version here.',
+  delete: 'AMC wants to remove this file.',
+};
+
 /** Why a change needs a decision, said in terms of what happened rather than rule names. */
 const REASON: Record<string, string> = {
   foreign: 'This file is already there and AMC did not put it there.',
@@ -304,14 +311,19 @@ function ChangeRow({
       {change.op === 'conflict' && (
         <div className="mb-1 ml-8 rounded-sm border border-drifted/40 bg-drifted/10 p-2">
           <p className="text-drifted">
-            {REASON[change.reason ?? ''] ?? 'This one needs a decision.'}
+            {PENDING[change.pending ?? ''] ?? 'This one needs a decision.'}{' '}
+            {REASON[change.reason ?? ''] ?? ''}
           </p>
           <div className="mt-1 flex flex-wrap gap-1">
             {(change.options ?? []).map((option) => (
               <button
                 key={option}
                 type="button"
-                title={CHOICE[option].hint}
+                title={
+                  change.pending === 'delete' && option === 'overwrite'
+                    ? 'Remove it anyway, discarding the outside edit.'
+                    : CHOICE[option].hint
+                }
                 aria-pressed={resolution === option}
                 onClick={() => onResolve(option)}
                 className={`h-6 rounded-sm border px-2 ${

@@ -116,6 +116,8 @@ export const ipcContract = {
     input: z.void(),
     output: z.object({
       ready: z.boolean(),
+      /** The app's own version, so no screen has to hardcode it. */
+      version: z.string(),
       home: z.string(),
       warnings: z.array(z.string()),
       counts: z.record(z.string(), z.number()),
@@ -129,6 +131,26 @@ export const ipcContract = {
   },
   /** Restarts the app, so a new library location takes effect. */
   'system.relaunch': { input: z.void(), output: z.object({ relaunching: z.boolean() }) },
+
+  // ---------- updates (T1.10.4) ----------
+  /**
+   * Asks whether a newer release exists. Nothing is downloaded or installed as a side effect,
+   * and the whole thing is off when `settings.updates` says so.
+   */
+  'updates.check': {
+    input: z.void(),
+    output: z.object({
+      state: z.enum(['off', 'unsupported', 'current', 'available', 'error']),
+      version: z.string().optional(),
+      message: z.string().optional(),
+    }),
+  },
+  'updates.download': {
+    input: z.void(),
+    output: z.object({ downloaded: z.boolean(), message: z.string().optional() }),
+  },
+  /** Quits and installs what was downloaded. Does nothing if there is no download. */
+  'updates.install': { input: z.void(), output: z.object({ installing: z.boolean() }) },
 
   // ---------- status (T1.9.3) ----------
   /**
@@ -501,6 +523,7 @@ export const eventContract = {
   /** Settings were written, so screens holding them (theme, onboarding) can catch up. */
   'settings.changed': z.object({ keys: z.array(z.string()) }),
   'log.warning': z.object({ scope: z.string(), message: z.string() }),
+  'update.progress': z.object({ percent: z.number(), version: z.string().optional() }),
 } as const;
 
 export type EventContract = typeof eventContract;

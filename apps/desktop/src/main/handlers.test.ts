@@ -173,6 +173,76 @@ describe('library handlers', () => {
   });
 });
 
+describe('release checks (T1.10.4)', () => {
+  const withUpdater = (updater: Parameters<typeof createHandlers>[0]['updater']) =>
+    createHandlers({
+      services,
+      dialog: { pickFolder: async () => null },
+      probe: () => ({
+        versions: { electron: '44', node: '24', chrome: '142' },
+        sqlite: { ok: true, version: '3', fts5: true },
+      }),
+      version: '0.1.0',
+      ...(updater && { updater }),
+    });
+
+  it('says nothing to do when this build is the newest', async () => {
+    const h2 = withUpdater({
+      check: async () => null,
+      download: async () => undefined,
+      install: () => false,
+    });
+    expect(await h2['updates.check']()).toEqual({ state: 'current', version: '0.1.0' });
+  });
+
+  it('reports a newer release without downloading it', async () => {
+    let downloaded = false;
+    const h2 = withUpdater({
+      check: async () => ({ version: '0.2.0' }),
+      download: async () => {
+        downloaded = true;
+      },
+      install: () => false,
+    });
+    expect(await h2['updates.check']()).toEqual({ state: 'available', version: '0.2.0' });
+    expect(downloaded).toBe(false);
+  });
+
+  it('never goes online when the user switched checking off', async () => {
+    await h['settings.update']({ patch: { updates: 'off' } });
+    let asked = false;
+    const h2 = withUpdater({
+      check: async () => {
+        asked = true;
+        return { version: '0.2.0' };
+      },
+      download: async () => undefined,
+      install: () => false,
+    });
+    expect(await h2['updates.check']()).toEqual({ state: 'off' });
+    expect(asked).toBe(false);
+  });
+
+  it('turns a failed check into a message rather than an exception', async () => {
+    const h2 = withUpdater({
+      check: async () => {
+        throw new Error('getaddrinfo ENOTFOUND github.com');
+      },
+      download: async () => undefined,
+      install: () => false,
+    });
+    expect(await h2['updates.check']()).toMatchObject({ state: 'error' });
+  });
+
+  it('says so plainly when this build cannot update itself', async () => {
+    expect(await withUpdater(undefined)['updates.check']()).toEqual({ state: 'unsupported' });
+    expect(await withUpdater(undefined)['updates.download']()).toMatchObject({
+      downloaded: false,
+    });
+    expect(withUpdater(undefined)['updates.install']()).toEqual({ installing: false });
+  });
+});
+
 describe('targets, preview, and deploy handlers', () => {
   const seed = async () => {
     await h['library.create']({

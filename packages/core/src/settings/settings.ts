@@ -24,6 +24,11 @@ export const settingsSchema = z.object({
       z.object({ autoApply: z.enum(['ask', 'when-no-conflicts', 'inherit']).default('inherit') }),
     )
     .default({}),
+  /**
+   * Whether to ask GitHub whether a newer release exists. This is the only network request AMC
+   * ever makes; nothing is downloaded or installed without the user saying so.
+   */
+  updates: z.enum(['check', 'off']).default('check'),
   /** Tool ids the user switched off even though they were detected. */
   disabledTools: z.array(z.string()).default([]),
   snapshots: z

@@ -47,16 +47,19 @@ function NavRow({ item }: { item: NavItem }) {
   );
 }
 
+/**
+ * A labelled group of links. The label names the `nav` rather than being a heading: it is
+ * signposting within the sidebar, not a peer of the page's own title, and a screen reader
+ * listing headings should not see "Deploy" twice.
+ */
 function Section({ label, items }: { label: string; items: NavItem[] }) {
   return (
-    <div className="mt-5 first:mt-0">
-      <h2 className="mb-1 px-2 text-xs font-medium text-muted-foreground">{label}</h2>
-      <nav className="flex flex-col gap-px">
-        {items.map((item) => (
-          <NavRow key={item.to} item={item} />
-        ))}
-      </nav>
-    </div>
+    <nav aria-label={label} className="mt-5 flex flex-col gap-px first:mt-0">
+      <p className="mb-1 px-2 text-xs font-medium text-muted-foreground">{label}</p>
+      {items.map((item) => (
+        <NavRow key={item.to} item={item} />
+      ))}
+    </nav>
   );
 }
 
@@ -95,7 +98,7 @@ export function AppShell() {
       <aside className="flex w-56 shrink-0 flex-col border-r bg-surface">
         <div className="flex h-11 items-center gap-2 border-b px-3">
           <span className="text-lg font-semibold tracking-tight">AMC</span>
-          <span className="id text-muted-foreground">v0.1.0</span>
+          <span className="id text-muted-foreground">v{status.data?.version ?? ''}</span>
         </div>
 
         <div className="flex-1 overflow-y-auto p-2">

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { ClipboardCopy, FolderOpen, RefreshCw, RotateCcw } from 'lucide-react';
+import { ClipboardCopy, Download, FolderOpen, RefreshCw, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { inputClass } from '@/components/ui/dialog';
 import { IpcCallError, call, useAction, useQuery } from '@/lib/ipc';
+import type { ChannelOutput } from '../../../shared/ipc-contract';
 
 /** One row of the settings form, since every one of them writes a single key. */
 function Row({
@@ -34,6 +35,9 @@ export function Settings() {
   const [copied, setCopied] = useState(false);
   const [relocating, setRelocating] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [release, setRelease] = useState<ChannelOutput<'updates.check'> | null>(null);
+  const [downloaded, setDownloaded] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const current = settings.data ?? {};
   const set = async (patch: Record<string, unknown>) => {
@@ -152,6 +156,81 @@ export function Settings() {
             <RefreshCw className="size-3.5" aria-hidden />
             {rebuild.pending ? 'Rebuilding…' : 'Rebuild it'}
           </Button>
+        </Row>
+      </section>
+
+      <section className="mt-6 max-w-3xl">
+        <h2 className="font-medium text-muted-foreground">Updates</h2>
+        <Row
+          label="Check for new versions"
+          hint="The only time AMC uses the network. Nothing is downloaded or installed unless you ask."
+        >
+          <select
+            className={inputClass}
+            aria-label="Check for new versions"
+            value={String(current['updates'] ?? 'check')}
+            onChange={(e) => void set({ updates: e.target.value })}
+          >
+            <option value="check">Let AMC check</option>
+            <option value="off">Never go online</option>
+          </select>
+        </Row>
+
+        <Row label="This version" hint={`You are running ${status.data?.version ?? '…'}.`}>
+          <div className="flex flex-col items-start gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setRelease(await call('updates.check'));
+                setBusy(false);
+              }}
+            >
+              <RefreshCw className="size-3.5" aria-hidden />
+              {busy ? 'Looking…' : 'Check now'}
+            </Button>
+
+            {release?.state === 'current' && <span className="text-in-sync">Up to date.</span>}
+            {release?.state === 'off' && (
+              <span className="text-muted-foreground">Checking is switched off above.</span>
+            )}
+            {release?.state === 'unsupported' && (
+              <span className="text-muted-foreground">
+                This build updates itself only when installed.
+              </span>
+            )}
+            {release?.state === 'error' && (
+              <span role="alert" className="text-destructive">
+                {release.message}
+              </span>
+            )}
+            {release?.state === 'available' && !downloaded && (
+              <>
+                <span className="text-outdated">{release.version} is available.</span>
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    const result = await call('updates.download');
+                    setDownloaded(result.downloaded);
+                    if (!result.downloaded && result.message) setError(result.message);
+                    setBusy(false);
+                  }}
+                >
+                  <Download className="size-3.5" aria-hidden />
+                  Download it
+                </Button>
+              </>
+            )}
+            {downloaded && (
+              <Button size="sm" onClick={() => void call('updates.install')}>
+                Restart and install
+              </Button>
+            )}
+          </div>
         </Row>
       </section>
 

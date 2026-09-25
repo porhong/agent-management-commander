@@ -212,7 +212,13 @@ export function Import() {
         </p>
 
         {record && (
-          <PlanDialog request={record} onClose={() => setRecord(null)} onApplied={reset} />
+          <PlanDialog
+            request={record}
+            onClose={() => {
+              setRecord(null);
+              reset();
+            }}
+          />
         )}
       </div>
     );

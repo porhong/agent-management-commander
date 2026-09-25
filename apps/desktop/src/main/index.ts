@@ -6,6 +6,7 @@ import { createAppServices } from './app-services';
 import { createHandlers, type DialogPort, type ShellPort } from './handlers';
 import { createEmitter, registerIpc } from './ipc-router';
 import { probeSqlite } from './sqlite-probe';
+import { createUpdater } from './updater';
 import { createWindow } from './window';
 import type { WorkerPort } from './worker/client';
 
@@ -110,6 +111,10 @@ if (!app.requestSingleInstanceLock()) {
         dialog: electronDialog,
         probe: systemProbe,
         shell: electronShell,
+        version: app.getVersion(),
+        updater: createUpdater((percent, updateVersion) =>
+          emit('update.progress', { percent, ...(updateVersion && { version: updateVersion }) }),
+        ),
       }),
       (channel, err) =>
         log.error('ipc handler failed', {

@@ -43,7 +43,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       <div className="flex h-full w-full max-w-2xl flex-col px-8 py-10">
         <div className="flex items-center gap-2">
           <span className="text-xl font-semibold tracking-tight">AMC</span>
-          <span className="id text-muted-foreground">v0.1.0</span>
+          <span className="id text-muted-foreground">v{status.data?.version ?? ''}</span>
           <div className="flex-1" />
           <Button size="sm" variant="ghost" onClick={() => void finish()}>
             <X className="size-3.5" aria-hidden />

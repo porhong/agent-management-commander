@@ -110,6 +110,7 @@ const impl: Record<string, (input?: unknown) => Promise<{ ok: true; value: unkno
   'system.status': () =>
     ok({
       ready: true,
+      version: '0.1.0',
       home: 'C:/Users/dev/.amc',
       warnings: [],
       counts: { items: ROWS.length, deployments: 3, targets: TARGETS.length },
@@ -117,6 +118,10 @@ const impl: Record<string, (input?: unknown) => Promise<{ ok: true; value: unkno
 
   'system.reveal': () => ok({ opened: true }),
   'system.relaunch': () => ok({ relaunching: false }),
+
+  'updates.check': () => ok({ state: 'available', version: '0.2.0' }),
+  'updates.download': () => ok({ downloaded: true }),
+  'updates.install': () => ok({ installing: false }),
 
   'status.drift': () =>
     ok({

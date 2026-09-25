@@ -32,6 +32,19 @@ export interface ShellPort {
   relaunch(): void;
 }
 
+/**
+ * Release checks (T1.10.4). Injected so the handlers stay Electron-free and so a test can drive
+ * every branch without a network or a published release.
+ */
+export interface UpdaterPort {
+  /** The newer version, or null when this build is current. Throws if the check fails. */
+  check(): Promise<{ version: string } | null>;
+  /** Downloads what `check` found. Throws if there is nothing to download. */
+  download(): Promise<void>;
+  /** Quits and installs. Returns false when there is nothing downloaded to install. */
+  install(): boolean;
+}
+
 export type HandlerMap = {
   [C in Channel]: (input: ChannelInput<C>) => Promise<ChannelOutput<C>> | ChannelOutput<C>;
 };
@@ -42,6 +55,10 @@ export interface HandlerDeps {
   probe: () => ChannelOutput<'system.probe'>;
   /** Omitted in tests, where revealing a folder and restarting are both no-ops. */
   shell?: ShellPort;
+  /** `app.getVersion()`; only main can ask Electron for it. */
+  version?: string;
+  /** Omitted in development and in tests, where there is no packaged build to update. */
+  updater?: UpdaterPort;
 }
 
 const toBase64 = (files: Record<string, Buffer>): Record<string, string> =>
@@ -80,7 +97,14 @@ function wireChange(c: PlannedChange) {
   };
 }
 
-export function createHandlers({ services, dialog, probe, shell }: HandlerDeps): HandlerMap {
+export function createHandlers({
+  services,
+  dialog,
+  probe,
+  shell,
+  version = '0.0.0',
+  updater,
+}: HandlerDeps): HandlerMap {
   const { library, deploy, index, settings, logger, adapters, tokens } = services;
   const log = logger.child('ipc');
 
@@ -153,6 +177,7 @@ export function createHandlers({ services, dialog, probe, shell }: HandlerDeps):
 
     'system.status': () => ({
       ready: true,
+      version,
       home: services.paths.home,
       warnings: services.warnings,
       counts: {
@@ -173,6 +198,33 @@ export function createHandlers({ services, dialog, probe, shell }: HandlerDeps):
       shell?.relaunch();
       return { relaunching: shell !== undefined };
     },
+
+    // ---------- updates (T1.10.4) ----------
+    'updates.check': async () => {
+      if (settings.get().updates === 'off') return { state: 'off' as const };
+      if (!updater) return { state: 'unsupported' as const };
+      try {
+        const found = await updater.check();
+        log.info('update check', { found: found?.version ?? null });
+        return found
+          ? { state: 'available' as const, version: found.version }
+          : { state: 'current' as const, version };
+      } catch (err) {
+        return { state: 'error' as const, message: (err as Error).message };
+      }
+    },
+
+    'updates.download': async () => {
+      if (!updater) return { downloaded: false, message: 'Updates are not available here.' };
+      try {
+        await updater.download();
+        return { downloaded: true };
+      } catch (err) {
+        return { downloaded: false, message: (err as Error).message };
+      }
+    },
+
+    'updates.install': () => ({ installing: updater?.install() ?? false }),
 
     // ---------- status (T1.9.3) ----------
     'status.drift': async () => {

@@ -221,9 +221,10 @@ export function DeployHistory() {
         <PlanDialog
           request={request}
           onClose={() => setRequest(null)}
+          // The dialog stays open on its report; closing it is the user's move, as everywhere else.
           onApplied={() => {
-            setRequest(null);
             history.reload();
+            incomplete.reload();
           }}
         />
       )}

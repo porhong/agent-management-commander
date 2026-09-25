@@ -231,6 +231,15 @@ interface TargetPlan {
 | T1.10.5 | Docs | README (install, first run, concepts in 5 minutes) and a `CHANGELOG.md` | — |
 | T1.10.6 | License | **Blocked on Q6.** Add `LICENSE` and third-party notices (`license-checker`) | — |
 
+> **M1.10 progress (2026-09-25):** T1.10.1, T1.10.3, T1.10.5 and T1.10.6 are done. T1.10.4 is wired but unverified, and T1.10.2 has not started.
+> - **T1.10.1 E2E:** five journeys (J1, J2, J3, J5-lite, rollback) through Playwright's `_electron`, against a temp `AMC_HOME` and `AMC_TOOL_HOME`, ~17s for the suite. Added to CI on Windows. No browser download is needed, since `_electron` drives the app itself.
+> - **T1.10.3 Packaging:** the 0.1.0 NSIS installer builds and the packaged app smoke-boots clean. The icon is generated from the app's own palette by `build/make-icon.mjs`, so it cannot drift from the design tokens. Per-user install and `deleteAppDataOnUninstall: false` were already set; `~/.amc` is not under appData, so an uninstall cannot reach it.
+> - **T1.10.6 License:** MIT (Q6 answered by the owner). `scripts/third-party-notices.mjs` replaces `license-checker`, which cannot read Bun's isolated store: it walks the runtime closure from the workspace manifests, so build tooling is excluded by construction rather than by name. 164 packages, all permissive, no copyleft.
+> - **T1.10.4 Updates:** `electron-updater` against GitHub Releases, bundled into main (the packaged app ships `out/**` only). `autoDownload` is off and nothing installs without the user asking; the whole check is behind a `updates` setting, since it is the only network request AMC makes. Handler branches are tested through an injected `UpdaterPort`. **Signing and a real update still need a certificate and a published release.**
+> - **T1.10.2 Dogfood:** not started. It needs a week of real use, which no amount of testing substitutes for.
+> - Found by the E2E suite, not by the unit tests: reverting a deploy closed the dialog the moment it succeeded, so the report of what was reverted was never seen (the same bug in Import's "record what is installed"); and a conflict row never said *what* it was asking about, so a plan that would delete a drifted file offered "Overwrite" with no hint that overwriting meant removing it.
+> - `ELECTRON_RUN_AS_NODE` has to be **deleted** from a child environment, not set to `''`: Electron checks whether the variable exists, so an empty value still starts it as plain Node.
+
 ## Phase 1 exit criteria
 
 1. Journeys J1, J2, and J3 work end to end on Windows with the real Claude Code and Codex.
