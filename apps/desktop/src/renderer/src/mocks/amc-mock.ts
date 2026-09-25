@@ -249,6 +249,88 @@ const impl: Record<string, (input?: unknown) => Promise<{ ok: true; value: unkno
     });
   },
 
+  'import.scan': () =>
+    ok({
+      scanId: 'scan_mock_1',
+      fileCount: 12,
+      durationMs: 180,
+      warnings: [],
+      groups: [
+        {
+          key: 'skill.security-checklist',
+          kind: 'skill',
+          slug: 'security-checklist',
+          name: 'Security Checklist',
+          description: 'Use when reviewing code for security issues.',
+          body: BODIES['skill.security-checklist']!,
+          canonicalId: 'claude-code:global|claude|skills/security-checklist/SKILL.md',
+          sources: [
+            {
+              candidateId: 'claude-code:global|claude|skills/security-checklist/SKILL.md',
+              targetId: 'claude-code:global',
+              toolId: 'claude-code',
+              label: 'Claude Code · Global',
+              relPath: 'skills/security-checklist/SKILL.md',
+              linked: false,
+              reason: 'same-content',
+              similarity: 1,
+              warnings: [],
+            },
+            {
+              candidateId: 'codex-cli:global|agents|skills/security-checklist/SKILL.md',
+              targetId: 'codex-cli:global',
+              toolId: 'codex-cli',
+              label: 'Codex CLI · Global',
+              relPath: 'skills/security-checklist/SKILL.md',
+              linked: false,
+              reason: 'similar',
+              similarity: 0.92,
+              warnings: [],
+            },
+          ],
+          suggestions: [],
+        },
+        {
+          key: 'agent.code-reviewer',
+          kind: 'agent',
+          slug: 'code-reviewer',
+          name: 'Code Reviewer',
+          description: 'Reviews changes for correctness and security.',
+          body: BODIES['agent.code-reviewer']!,
+          canonicalId: 'claude-code:global|claude|agents/code-reviewer.md',
+          sources: [
+            {
+              candidateId: 'claude-code:global|claude|agents/code-reviewer.md',
+              targetId: 'claude-code:global',
+              toolId: 'claude-code',
+              label: 'Claude Code · Global',
+              relPath: 'agents/code-reviewer.md',
+              linked: false,
+              reason: 'same-content',
+              similarity: 1,
+              warnings: ['description was shortened to fit'],
+            },
+          ],
+          suggestions: [
+            {
+              to: 'skill.security-checklist',
+              relation: 'equips',
+              evidence: 'Always run the security-checklist before commenting.',
+            },
+          ],
+        },
+      ],
+    }),
+  'import.adopt': (input) => {
+    const { items } = (input ?? {}) as { items: { key: string; slug: string }[] };
+    return ok({
+      created: items.map((i) => `${i.key.split('.')[0]}.${i.slug}`),
+      skipped: [],
+      notes: [],
+      targetIds: ['claude-code:global', 'codex-cli:global'],
+    });
+  },
+
   'deploy.plan': () =>
     ok({
       planId: 'plan_mock_1',

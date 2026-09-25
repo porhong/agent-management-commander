@@ -273,6 +273,75 @@ export const ipcContract = {
     output: z.object({ files: z.array(compiledFileSchema) }),
   },
 
+  // ---------- import (M1.8) ----------
+  /**
+   * Reads what the tools already have and proposes library items. Strictly read-only: a scan
+   * never writes to a tool folder or to the library.
+   */
+  'import.scan': {
+    input: z.object({ targetIds: z.array(z.string().max(300)).optional() }),
+    output: z.object({
+      scanId: z.string(),
+      fileCount: z.number(),
+      durationMs: z.number(),
+      warnings: z.array(z.string()),
+      groups: z.array(
+        z.object({
+          key: z.string(),
+          kind,
+          slug: z.string(),
+          name: z.string(),
+          description: z.string(),
+          body: z.string(),
+          /** An item already in the library that this would collide with. */
+          existingId: itemId.optional(),
+          canonicalId: z.string(),
+          sources: z.array(
+            z.object({
+              candidateId: z.string(),
+              targetId: z.string(),
+              toolId: z.string(),
+              label: z.string(),
+              relPath: z.string(),
+              linked: z.boolean(),
+              reason: z.enum(['same-slug', 'same-content', 'similar']),
+              similarity: z.number(),
+              warnings: z.array(z.string()),
+            }),
+          ),
+          suggestions: z.array(
+            z.object({ to: z.string(), relation: z.string(), evidence: z.string() }),
+          ),
+        }),
+      ),
+    }),
+  },
+  'import.adopt': {
+    input: z.object({
+      scanId: z.string().max(64),
+      items: z
+        .array(
+          z.object({
+            key: z.string().max(200),
+            slug,
+            candidateId: z.string().max(600).optional(),
+            links: z
+              .array(z.object({ to: z.string().max(200), relation: z.string().max(40) }))
+              .optional(),
+          }),
+        )
+        .min(1),
+    }),
+    output: z.object({
+      created: z.array(itemId),
+      skipped: z.array(z.object({ key: z.string(), reason: z.string() })),
+      /** References that could not be carried over, so the loss is never silent. */
+      notes: z.array(z.string()),
+      /** Where the adopted items came from, so the UI can offer to record ownership. */
+      targetIds: z.array(z.string()),
+    }),
+  },
+
   // ---------- deploy ----------
   'deploy.plan': {
     input: z.object({

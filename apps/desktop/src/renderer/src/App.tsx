@@ -2,6 +2,7 @@ import { Navigate, RouterProvider, createHashRouter, type RouteObject } from 're
 import { AppShell } from '@/components/app-shell';
 import { Deploy } from '@/routes/deploy';
 import { DeployHistory } from '@/routes/deploy-history';
+import { Import } from '@/routes/import';
 import { LibraryList } from '@/routes/library-list';
 import { Matrix } from '@/routes/matrix';
 import { Targets } from '@/routes/targets';
@@ -24,16 +25,7 @@ export const routes: RouteObject[] = [
       { path: 'matrix', element: <Matrix /> },
       { path: 'history', element: <DeployHistory /> },
       { path: 'deploy', element: <Deploy /> },
-      {
-        path: 'import',
-        element: (
-          <ComingSoon
-            title="Import"
-            milestone="M1.8"
-            blurb="Bring in what you already have. Import never changes your tool folders."
-          />
-        ),
-      },
+      { path: 'import', element: <Import /> },
       {
         path: 'settings',
         element: (

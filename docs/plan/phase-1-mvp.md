@@ -196,6 +196,14 @@ interface TargetPlan {
 | T1.8.4 | Adopt | Write library items. Record the **existing** native files in the target lockfiles as-is (their current hash) | **Zero** bytes changed in target folders after adopt (safety test) |
 | T1.8.5 | Import wizard UI | Detect → Scan → Review (groups, conflicts in naming, suggestions with accept/reject) → Adopt → Summary | Can go back through steps. Cancel leaves no trace |
 
+> **M1.8 progress (2026-09-25):** done, in `packages/core/src/import/`. Decisions:
+> - **Adopt writes to the library and to nothing else (S6).** T1.8.4 also asks for the native files to be recorded in the target lockfiles, and those two pull in opposite directions. The resolution: importing writes only library items, and recording ownership is a separate, reviewable deploy offered at the end. The planner already turns a byte-identical file into an `unchanged` change that records its lock entry without rewriting it, so that plan changes no existing bytes — a test fingerprints every tool file before and after to prove it.
+> - **Dedupe is two passes**: the same kind and normalized slug first, then a merge of buckets whose canonical bodies hash the same or overlap by Jaccard ≥ 0.85 over two-line shingles. Short items are deliberately left apart: one different line out of three is a third of the item, not a copy.
+> - **Suggestions come only from prose.** A reference already declared in frontmatter is a real reference and is carried over on adopt, remapped if the user renamed the item; anything merely mentioned in the body is offered with the line it came from, unaccepted by default.
+> - Found while writing the tests: adopt dropped the references a native file already declared, so importing the Claude agent fixture silently lost its two skills. Fixed, with the mode (`always` in Claude's frontmatter) preserved.
+> - The renderer never sees a scan: `import.scan` returns a `scanId` and main holds the candidates, the same shape as deploy plans.
+> - Found by screenshot: `inputClass` is `w-full`, which beat the `w-56` on the slug box and pushed the description and controls out of the row.
+
 ## M1.9: Dashboard & onboarding
 
 | ID | Task | Deliverables | Acceptance |

@@ -1,5 +1,6 @@
 import {
   AmcError,
+  adoptCandidates,
   CORE_RULES,
   ITEM_TEMPLATES,
   Validator,
@@ -7,11 +8,13 @@ import {
   looksBinary,
   parseManifest,
   resolveClosure,
+  scanTargets,
   targetId,
   type Content,
   type DeployPlan,
   type LibraryItem,
   type PlannedChange,
+  type RefRelation,
   type Target,
 } from '@amc/core';
 import type { Channel, ChannelInput, ChannelOutput, TargetRef } from '../shared/ipc-contract';
@@ -342,6 +345,108 @@ export function createHandlers({ services, dialog, probe }: HandlerDeps): Handle
             };
           }),
       };
+    },
+
+    // ---------- import (M1.8) ----------
+    'import.scan': async ({ targetIds }) => {
+      const started = Date.now();
+      const all = services.targets();
+      const chosen = targetIds?.length ? all.filter((t) => targetIds.includes(targetId(t))) : all;
+      const existing = new Set(index.listItems().map((row) => row.id));
+      const scan = await scanTargets(
+        {
+          adapters,
+          onProgress: (p) =>
+            services.emit('scan.progress', {
+              toolId: p.toolId,
+              done: p.done,
+              total: p.total,
+              ...(p.label && { label: p.label }),
+            }),
+        },
+        chosen,
+        existing,
+      );
+
+      const scanId = `scan_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      services.scans.set(scanId, scan);
+      if (services.scans.size > 5) {
+        services.scans.delete(services.scans.keys().next().value!);
+      }
+
+      const byId = new Map(scan.candidates.map((c) => [c.id, c]));
+      const labelOf = (tid: string) =>
+        all
+          .filter((t) => targetId(t) === tid)
+          .map((t) => targetLabel(t, displayName(t.toolId)))[0] ?? tid;
+
+      log.info('import scan', { targets: chosen.length, groups: scan.groups.length });
+
+      return {
+        scanId,
+        fileCount: scan.fileCount,
+        durationMs: Date.now() - started,
+        warnings: scan.warnings,
+        groups: scan.groups.map((group) => {
+          const canonical = byId.get(group.canonicalId)!;
+          return {
+            key: group.key,
+            kind: group.kind,
+            slug: group.slug,
+            name: canonical.item.manifest.name,
+            description: canonical.item.manifest.description,
+            body: canonical.item.body,
+            ...(group.existingId && { existingId: group.existingId }),
+            canonicalId: group.canonicalId,
+            sources: group.sources.flatMap((source) => {
+              const candidate = byId.get(source.candidateId);
+              if (!candidate) return [];
+              return [
+                {
+                  candidateId: candidate.id,
+                  targetId: candidate.targetId,
+                  toolId: candidate.toolId,
+                  label: labelOf(candidate.targetId),
+                  relPath: candidate.entry,
+                  linked: candidate.linked,
+                  reason: source.reason,
+                  similarity: source.similarity,
+                  warnings: candidate.warnings,
+                },
+              ];
+            }),
+            suggestions: group.suggestions,
+          };
+        }),
+      };
+    },
+
+    'import.adopt': async ({ scanId, items }) => {
+      const scan = services.scans.get(scanId);
+      if (!scan) {
+        throw new AmcError('SCAN_STALE', 'That scan is no longer available. Scan again.');
+      }
+      const result = await adoptCandidates(
+        library,
+        scan,
+        items.map((item) => ({
+          key: item.key,
+          slug: item.slug,
+          ...(item.candidateId && { candidateId: item.candidateId }),
+          ...(item.links && {
+            links: item.links.map((l) => ({ to: l.to, relation: l.relation as RefRelation })),
+          }),
+        })),
+      );
+      if (result.created.length > 0) {
+        await services.refreshIndex();
+        services.emit('library.changed', { ids: result.created, reason: 'create' });
+      }
+      log.info('import adopted', {
+        created: result.created.length,
+        skipped: result.skipped.length,
+      });
+      return result;
     },
 
     // ---------- deploy ----------

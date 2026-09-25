@@ -18,6 +18,7 @@ import {
   type AdapterHost,
   type AmcPaths,
   type DeployPlan,
+  type ScanResult,
   type FsPort,
   type Lockfile,
   type Target,
@@ -45,6 +46,8 @@ export interface AppServices {
   worker: WorkerClient;
   /** Plans live in main; the renderer only ever holds a planId (T1.5.2). */
   plans: Map<string, DeployPlan>;
+  /** Import scans, held here so the renderer only ever passes a scanId. */
+  scans: Map<string, ScanResult>;
   warnings: string[];
   /** Every target the user has: global scopes plus registered projects. */
   targets(): Target[];
@@ -124,6 +127,7 @@ export async function createAppServices(opts: CreateServicesOptions = {}): Promi
     emit,
     worker,
     plans: new Map(),
+    scans: new Map(),
     warnings,
 
     targets(): Target[] {

@@ -30,6 +30,8 @@ export const CHANNEL_NAMES = [
   'targets.addProject',
   'targets.removeProject',
   'compile.preview',
+  'import.scan',
+  'import.adopt',
   'deploy.plan',
   'deploy.apply',
   'deploy.history',

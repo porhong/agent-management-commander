@@ -62,6 +62,7 @@ Bun workspaces monorepo (Bun is the package manager and script runner). The tool
   - Each adapter documents its mapping in `FORMAT.md` §8. Round-trip equality is **semantic** (frontmatter values plus body), not byte-level.
 - **Command templates** use `{{args}}` and `{{name}}` placeholders. A literal `{{` is escaped as `\{{` (`packages/core/src/adapter/placeholders.ts`).
 - **Links:** skill folders reached through a symlink or junction (common with `~/.agents/skills`) are read but never written through.
+- **Import never writes to a tool folder** (S6). `packages/core/src/import/` scans through the adapters, groups what it finds (slug, then content similarity), and `adopt` writes library items only. Telling AMC it now owns those files is a separate deploy the user reviews: a byte-identical file becomes an `unchanged` change that records its lock entry without being rewritten.
 - **The deploy pipeline** runs: resolve closure → validate → compile → **plan** → snapshot → atomic write → lockfile.
   - No code path writes to a target without a plan.
   - The plan carries `readHashes`, and apply rejects a stale plan.
