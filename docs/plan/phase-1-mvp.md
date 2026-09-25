@@ -46,6 +46,13 @@
 | T1.2.4 | Validator framework | `Rule { id, severity, check(ctx) → Issue[] }`. Issues carry `itemId`, `path` (field), `targetId?`, message, and optional `fix` | Rules can be registered by adapters (per-target rules) |
 | T1.2.5 | Initial rules | The rules in [concept 05 §6](../concept/05-architecture.md#6-validation-rules-initial-set) **plus** the secret scanner (regex set for common key formats) and the path-safety check on slugs | Each rule has passing and failing fixtures |
 
+> **M1.2 outcome (2026-09-25):** done in `packages/core/src/resolver/` and `packages/core/src/validator/`. Decisions beyond the table:
+> - Edge relations are `equips`, `delegates-to`, `uses-agent`, `preloads`, and `depends-on`. Each edge carries its manifest field path (`skills.1.ref`), so issues point at the field and the "remove reference" fix drops only that entry.
+> - `resolveClosure` throws `REF_BROKEN`/`REF_CYCLE`. Callers run the validator first to get the same problems as issues. Shared dependencies are the same `ResolvedItem` object.
+> - Issues carry `blocking`: always true for errors, and also true for untrusted skill scripts, which are a warning that blocks deploy. A fix is data (`{ itemId, fields }`) applied through `LibraryService.update`.
+> - Per-tool rules come from factories that adapters register in M1.3: `descriptionLimitRule(toolId, limit, severity)` and `slugNamingRule(toolId, check)`. The core path-safety rule rejects Windows device names (`con`, `nul`, `lpt1`, …), which pass the slug regex.
+> - The inline-size threshold is 40,000 characters (body + always-on skills + their dependencies). `unused-item` runs only when deploy data is passed in, which happens once M1.4 exists.
+
 ## M1.3: Adapters (Claude Code, Codex CLI)
 
 | ID | Task | Deliverables | Acceptance |

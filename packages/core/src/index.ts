@@ -3,5 +3,7 @@ export * from './errors';
 export * from './fs';
 export * from './model';
 export * from './library';
+export * from './resolver';
+export * from './validator';
 export * from './adapter';
 export { manifestJsonSchema } from './model/json-schema';

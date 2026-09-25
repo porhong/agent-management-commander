@@ -11,7 +11,9 @@ export type AmcErrorCode =
   | 'SLUG_TAKEN'
   | 'ITEM_REFERENCED'
   | 'TEMPLATE_NOT_FOUND'
-  | 'GIT_FAILED';
+  | 'GIT_FAILED'
+  | 'REF_BROKEN'
+  | 'REF_CYCLE';
 
 export class AmcError extends Error {
   constructor(
