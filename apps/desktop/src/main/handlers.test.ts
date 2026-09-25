@@ -292,6 +292,15 @@ describe('targets, preview, and deploy handlers', () => {
     expect(history[0]).toMatchObject({ deployId: report.deployId, kind: 'deploy', fileCount: 2 });
     expect(await h['deploy.incomplete']()).toEqual([]);
 
+    // What that deploy did, read back from its snapshot for the History screen (T1.7.5).
+    const detail = await h['deploy.report']({ deployId: report.deployId });
+    expect(detail.targets).toHaveLength(1);
+    expect(detail.targets[0]!.files.map((f) => `${f.op}:${f.relPath}`).sort()).toEqual([
+      'create:agents/rev.md',
+      'create:skills/sec/SKILL.md',
+    ]);
+    expect(detail.targets[0]!.files.every((f) => f.itemId)).toBe(true);
+
     const rollback = await h['deploy.planRollback']({ deployId: report.deployId });
     expect(rollback.kind).toBe('rollback');
     await h['deploy.apply']({ planId: rollback.planId });

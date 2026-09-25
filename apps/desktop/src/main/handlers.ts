@@ -278,7 +278,7 @@ export function createHandlers({ services, dialog, probe }: HandlerDeps): Handle
         toolId: t.toolId,
         scope: t.scope,
         label: targetLabel(t, displayName(t.toolId)),
-        ...(t.scope === 'project' && { root: t.root }),
+        ...(t.scope === 'project' && { root: t.root, token: tokens.issue(t.root) }),
         roots: adapters.get(t.toolId).paths(t),
       })),
 
@@ -402,6 +402,31 @@ export function createHandlers({ services, dialog, probe }: HandlerDeps): Handle
         ...(m.revertsDeployId && { revertsDeployId: m.revertsDeployId }),
         fileCount: m.entries.filter((e) => e.relPath !== '.amc-lock.json').length,
       })),
+
+    // Read-only: the snapshot manifest records what each op did, per target.
+    'deploy.report': async ({ deployId }) => {
+      const manifest = await deploy.readManifest(deployId);
+      const byTarget = new Map<string, ChannelOutput<'deploy.report'>['targets'][number]>();
+      for (const entry of manifest.entries) {
+        // Lockfiles carry no item and are bookkeeping, not something the user deployed.
+        if (entry.relPath === '.amc-lock.json') continue;
+        const group = byTarget.get(entry.targetId) ?? { targetId: entry.targetId, files: [] };
+        group.files.push({
+          root: entry.root,
+          relPath: entry.relPath,
+          ...(entry.itemId && { itemId: entry.itemId }),
+          op: !entry.afterFile ? 'delete' : entry.existed ? 'update' : 'create',
+        });
+        byTarget.set(entry.targetId, group);
+      }
+      return {
+        deployId: manifest.deployId,
+        kind: manifest.kind,
+        createdAt: manifest.createdAt,
+        ...(manifest.revertsDeployId && { revertsDeployId: manifest.revertsDeployId }),
+        targets: [...byTarget.values()],
+      };
+    },
 
     'deploy.planRollback': async ({ deployId }) =>
       wirePlan(remember(await deploy.planRollback(deployId))),

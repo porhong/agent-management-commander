@@ -239,6 +239,11 @@ export const ipcContract = {
         scope: z.enum(['global', 'project']),
         label: z.string(),
         root: z.string().optional(),
+        /**
+         * For project targets: the token that names this root back to main. Main issues it for
+         * a root the user already registered, so the renderer still never sends a path.
+         */
+        token: pathTokenSchema.optional(),
         roots: z.record(z.string(), z.string()),
       }),
     ),
@@ -300,6 +305,30 @@ export const ipcContract = {
         fileCount: z.number(),
       }),
     ),
+  },
+  /** What one past deploy actually did, read back from its snapshot manifest (T1.7.5). */
+  'deploy.report': {
+    input: z.object({ deployId: z.string().max(64) }),
+    output: z.object({
+      deployId: z.string(),
+      kind: z.enum(['deploy', 'rollback']),
+      createdAt: z.string(),
+      revertsDeployId: z.string().optional(),
+      targets: z.array(
+        z.object({
+          targetId: z.string(),
+          files: z.array(
+            z.object({
+              root: z.string(),
+              relPath: z.string(),
+              region: z.string().optional(),
+              itemId: z.string().optional(),
+              op: z.enum(['create', 'update', 'delete']),
+            }),
+          ),
+        }),
+      ),
+    }),
   },
   'deploy.planRollback': { input: z.object({ deployId: z.string().max(64) }), output: planSchema },
   'deploy.matrix': {

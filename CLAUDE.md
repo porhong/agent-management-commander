@@ -26,6 +26,8 @@ Bun workspaces monorepo (Bun is the package manager and script runner). The tool
 - `AMC_REAL_HOME=1 bunx vitest run packages/adapters/claude-code`: opt-in, **read-only** round-trip against the real `~/.claude`. All other tests use fixtures, `MemFs`, or temp dirs.
 - `AMC_SMOKE=1 "<app>.exe"`: the headless smoke mode. The packaged app prints a JSON probe (versions, SQLite/FTS5) and exits. Also setting `AMC_HOME=<dir>` boots the real services against that home and reports `{ok, items, targets, fallbacks}`, which exercises the utility process. CI runs both.
 - `VITE_AMC_MOCK=1 bun run dev`: runs the renderer against fixture data (`renderer/src/mocks/amc-mock.ts`) with no real core behind it.
+- `AMC_TOOL_HOME=<dir>`: points the **adapters** at a throwaway home, so a real deploy writes to `<dir>/.claude` instead of yours. Use it (with `AMC_HOME`) whenever a dev run might apply a plan. Overriding `USERPROFILE` instead crashes Electron on Windows.
+- `AMC_SCREENSHOT=<png>` renders the app and exits; `AMC_SCREENSHOT_ROUTE` sets the hash route and `AMC_SCREENSHOT_CLICK="A|B"` clicks those labels in order first. This is how UI work is reviewed without a visible desktop.
 
 > Running Electron from a shell that exports `ELECTRON_RUN_AS_NODE=1` silently starts plain Node, and `require('electron').app` is then undefined. Clear it first.
 

@@ -292,6 +292,31 @@ const impl: Record<string, (input?: unknown) => Promise<{ ok: true; value: unkno
         fileCount: 2,
       },
     ]),
+  'deploy.report': (input) =>
+    ok({
+      deployId: ((input ?? {}) as { deployId: string }).deployId,
+      kind: 'deploy',
+      createdAt: '2026-09-25T10:00:00.000Z',
+      targets: [
+        {
+          targetId: 'claude-code:global',
+          files: [
+            {
+              root: 'claude',
+              relPath: 'skills/security-checklist/SKILL.md',
+              itemId: 'skill.security-checklist',
+              op: 'update',
+            },
+            {
+              root: 'claude',
+              relPath: 'agents/code-reviewer.md',
+              itemId: 'agent.code-reviewer',
+              op: 'create',
+            },
+          ],
+        },
+      ],
+    }),
   'deploy.planRollback': () => impl['deploy.plan']!(undefined as never),
   'deploy.matrix': () =>
     ok([

@@ -33,6 +33,7 @@ export const CHANNEL_NAMES = [
   'deploy.plan',
   'deploy.apply',
   'deploy.history',
+  'deploy.report',
   'deploy.planRollback',
   'deploy.matrix',
   'deploy.incomplete',

@@ -178,6 +178,14 @@ interface TargetPlan {
 | T1.7.4 | Deployment matrix | Items × targets grid with status cells (in sync / outdated / missing / not deployed). Clicking a cell opens a plan | Uses a single index query and stays virtualized for 500 × 10 |
 | T1.7.5 | History | Deploy timeline, report detail (files, adaptations), and Revert (→ rollback plan) | Revert shows the plan like any other deploy |
 
+> **M1.7 progress (2026-09-25):** done. Decisions and findings:
+> - **A plan is declarative**, so a target ends up holding exactly what its selection names and anything else AMC put there is retired. Every entry point therefore starts from what is already deployed and adds to it (`lib/deploy.ts`); deploying one item must never quietly remove the rest. A test pins this.
+> - **One `PlanDialog` for every write.** The deploy screen, a matrix cell, removing a project's files, and Revert all build a `PlanRequest` and hand it to the same component, so there is one place where a change is reviewed and applied.
+> - **Registered project targets now carry a token.** `targets.list` returns the token main issued for each project root, because the renderer cannot turn a path back into one — without it, a project target could be listed but never deployed to. The renderer still never sends a path.
+> - **Added `deploy.report`**, which reads a past deploy's snapshot manifest. Adaptations are not stored in the snapshot, so the detail view says plainly that they are shown while planning.
+> - **Per-target auto-apply** is a `targetSettings` override on the global `autoApply`. Auto-apply only ever fires when the plan has no conflicts and no blocking issues.
+> - `AMC_TOOL_HOME` points the adapters at a throwaway home, so a real deploy in dev or E2E lands there instead of the user's `~/.claude`. Overriding `USERPROFILE` instead crashes Electron on Windows. `AMC_SCREENSHOT_CLICK` clicks a list of labels before capturing, which is how the plan dialog, a real apply, and a real revert were verified in the running app.
+
 ## M1.8: Import
 
 | ID | Task | Deliverables | Acceptance |

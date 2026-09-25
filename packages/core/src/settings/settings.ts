@@ -12,6 +12,13 @@ export const settingsSchema = z.object({
   autoApply: z.enum(['ask', 'when-no-conflicts']).default('ask'),
   /** Registered project targets (absolute paths), shown alongside the global scopes. */
   projectRoots: z.array(z.string()).default([]),
+  /** Per-target override of `autoApply`, keyed by target id. Absent means inherit. */
+  targetSettings: z
+    .record(
+      z.string(),
+      z.object({ autoApply: z.enum(['ask', 'when-no-conflicts', 'inherit']).default('inherit') }),
+    )
+    .default({}),
   /** Tool ids the user switched off even though they were detected. */
   disabledTools: z.array(z.string()).default([]),
   snapshots: z
