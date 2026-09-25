@@ -1,0 +1,8 @@
+bun.lock
+out/
+dist/
+release/
+fixtures/
+docs/
+**/__snapshots__/
+packages/core/schema/

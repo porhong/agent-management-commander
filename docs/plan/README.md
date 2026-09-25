@@ -88,6 +88,6 @@ The seam between the tracks is the **IPC contract** (`apps/desktop/src/shared/ip
 | Risk | Early signal | Response |
 |------|--------------|----------|
 | Codex (or another tool) format differs from assumptions | P0-01 findings | Adjust the capability matrix and degradations *before* M1.3; don't bend the canonical model |
-| Native module pain (better-sqlite3 in Electron) | P0-03 build fails on CI | Fallback: `node:sqlite` (built into Node 22+) or sql.js (WASM). Keep the index behind an `IndexStore` interface |
+| ~~Native module pain (better-sqlite3 in Electron)~~ | **Happened in P0-03, now resolved** | Switched to the built-in `node:sqlite` (FTS5 verified in the packaged app). The index still sits behind an `IndexStore` interface |
 | Deployer bug overwrites user files | Any failing safety test | Stop the line. Safety invariants ([engineering-practices §5](engineering-practices.md#5-safety-invariants-must-never-break)) block merge |
 | UI scope balloons | M1.6 over estimate by >50% | Ship forms + raw mode first; defer the relations mini-graph to Phase 2 |

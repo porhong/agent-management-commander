@@ -1,0 +1,3 @@
+# Profile file (Codex >= 0.134): selected with `codex --profile deep-work`
+model = "gpt-5.5"
+model_reasoning_effort = "high"

@@ -1,0 +1,6 @@
+model = "gpt-5.5"
+sandbox_mode = "workspace-write"
+
+[[skills.config]]
+path = "~/.agents/skills/legacy-thing/SKILL.md"
+enabled = false

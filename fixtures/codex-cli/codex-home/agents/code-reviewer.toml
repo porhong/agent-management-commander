@@ -1,0 +1,11 @@
+name = "code-reviewer"
+description = "Reviews code for correctness, security and style."
+model = "gpt-5.5"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+developer_instructions = """
+You are a senior code reviewer.
+
+1. Read the diff.
+2. Check correctness first, then security.
+"""

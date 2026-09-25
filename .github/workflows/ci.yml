@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      # Tool CLIs (vitest, eslint, electron-vite) still run on Node.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run format:check
+      - run: bun run typecheck
+      - run: bun run test
+
+  package-smoke:
+    # Proves the packaged app starts and SQLite (node:sqlite + FTS5) works (P0-03).
+    needs: check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      # Tool CLIs (vitest, eslint, electron-vite) still run on Node.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: bun install --frozen-lockfile
+      - run: bun run build:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Smoke test packaged app
+        shell: pwsh
+        run: |
+          $env:AMC_SMOKE = '1'
+          $exe = Get-ChildItem apps/desktop/release -Recurse -Filter 'Agent Management Commander.exe' | Select-Object -First 1
+          $out = & $exe.FullName 2>&1 | Out-String
+          Write-Output $out
+          if ($LASTEXITCODE -ne 0) { exit 1 }

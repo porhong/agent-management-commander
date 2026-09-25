@@ -55,11 +55,11 @@
 
 | # | Question | Options | Leaning |
 |---|----------|---------|---------|
-| Q1 | Canonical skill format: invent our own or adopt the `SKILL.md` convention directly? | Own format / SKILL.md + `amc.yaml` sidecar | **SKILL.md body + `amc.yaml` sidecar**: closest to an emerging standard, keeps AMC metadata separate |
+| Q1 | Canonical skill format: invent our own or adopt the `SKILL.md` convention directly? | Own format / SKILL.md + `amc.yaml` sidecar | ✅ **Decided (Phase 0):** SKILL.md body + `amc.yaml` sidecar. Confirmed by Codex also adopting the Agent Skills standard. Slugs follow the Agent Skills name rules |
 | Q2 | Library location default | `~/.amc/library` / Documents / user-chosen at onboarding | `~/.amc/library`, changeable at onboarding |
-| Q3 | Git engine | isomorphic-git (bundled) / system git | isomorphic-git by default, system git if detected (for remotes & credentials) |
+| Q3 | Git engine | isomorphic-git (bundled) / system git | ✅ **Decided (Phase 0):** isomorphic-git by default, system git later for remotes and credentials |
 | Q4 | Is a workflow deployable to tools without sub-agents at all? | Yes, degraded / No, block | Yes, degraded, with clear "Adapted" label |
-| Q5 | Should the renderer UI library be shadcn/ui or something like Mantine? | shadcn/ui / Mantine / Fluent | shadcn/ui (flexible, dense, themable) |
+| Q5 | Should the renderer UI library be shadcn/ui or something like Mantine? | shadcn/ui / Mantine / Fluent | ✅ **Decided (Phase 0):** shadcn/ui on Tailwind v4, scaffolded in `apps/desktop` |
 | Q6 | License & distribution | Open source (MIT) / source-available / closed | *Owner decision* |
 | Q7 | Do we support per-project *library* (items that live in a repo, not in `~/.amc`)? | Global library only / also project libraries | Phase 2: allow mounting a repo folder as an additional library source |
 | Q8 | Naming of the composed unit | Workflow / Recipe / Playbook / Mission | **Workflow** (matches user mental model) |

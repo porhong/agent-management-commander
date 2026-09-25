@@ -1,0 +1,25 @@
+appId: dev.amc.desktop
+productName: Agent Management Commander
+directories:
+  buildResources: build
+  output: release/${version}
+files:
+  - out/**
+  - package.json
+asarUnpack:
+  - '**/*.node'
+win:
+  target: nsis
+  artifactName: amc-${version}-setup.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  # Uninstall must never touch the user's ~/.amc library.
+  deleteAppDataOnUninstall: false
+mac:
+  target: dmg
+linux:
+  target: [AppImage, deb]
+  category: Development
+npmRebuild: false

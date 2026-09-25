@@ -12,7 +12,7 @@
 | Editor | **Monaco** | Markdown/YAML editing, diff viewer, 3-way merge view |
 | Graph canvas | **React Flow** (@xyflow/react) | Composer and relation graphs |
 | Schema/validation | **Zod** | One schema → runtime validation + TS types + JSON Schema for YAML editor hints |
-| Index DB | **SQLite** via better-sqlite3 (FTS5 for search) | Fast queries and search; *rebuildable cache*, not source of truth |
+| Index DB | **SQLite** via built-in `node:sqlite` (FTS5 for search) | Fast queries and search; *rebuildable cache*, not source of truth. No native module to rebuild: better-sqlite3 was dropped in Phase 0 because it had no prebuilt binary for our toolchain |
 | File watching | **chokidar** (or `@parcel/watcher`) | Drift detection on target folders + library |
 | Git | **isomorphic-git** or system git via `simple-git` | Library history without requiring git installed (isomorphic-git) |
 | Frontmatter / YAML | `gray-matter`, `yaml`; `@iarna/toml` for Gemini | Native format parsing |

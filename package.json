@@ -1,0 +1,39 @@
+{
+  "name": "agent-management-commander",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "packages/adapters/*"
+  ],
+  "trustedDependencies": [
+    "esbuild"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "bun run --cwd apps/desktop dev",
+    "build": "bun run --cwd apps/desktop build",
+    "build:win": "bun run --cwd apps/desktop build:win",
+    "lint": "eslint .",
+    "typecheck": "bun run --filter '*' typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.0.0",
+    "eslint": "^10.11.0",
+    "fast-check": "^4.10.2",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.70.1",
+    "vitest": "^5.0.1"
+  }
+}

@@ -23,12 +23,12 @@ interface ToolAdapter {
 
 ## 2. Initial tool coverage
 
-> ⚠️ Paths and formats below come from our current understanding of each tool's conventions. AI tools change fast, so **each adapter's first task is to verify these against the tool's current docs** and record the verified version in the adapter's metadata.
+> ⚠️ AI tools change fast, so **each adapter's first task is to verify its paths and formats against the tool's current docs** and record the result in the adapter's `FORMAT.md`. Claude Code and Codex were verified on 2026-09-25 in Phase 0: see [claude-code/FORMAT.md](../../packages/adapters/claude-code/FORMAT.md) and [codex-cli/FORMAT.md](../../packages/adapters/codex-cli/FORMAT.md). The other rows are still assumptions.
 
 | Tool | Agents | Skills | Commands | Global root | Project root | Priority |
 |------|--------|--------|----------|-------------|--------------|----------|
-| **Claude Code** | `agents/*.md` (YAML frontmatter) | `skills/<name>/SKILL.md` | `commands/*.md` | `~/.claude/` | `.claude/` | **P0** |
-| **OpenAI Codex CLI** | via `AGENTS.md` / profiles *(verify)* | `skills/<name>/SKILL.md` *(verify)* | `prompts/*.md` | `~/.codex/` | `.codex/` / `AGENTS.md` | **P0** |
+| **Claude Code** ✅ | `agents/**/*.md` (YAML frontmatter) | `skills/<name>/SKILL.md` | `commands/**/*.md` | `~/.claude/` (`CLAUDE_CONFIG_DIR`) | `.claude/` | **P0** |
+| **OpenAI Codex CLI** ✅ | `agents/*.toml` (native custom agents) | `~/.agents/skills/<name>/SKILL.md` (shared Agent Skills folder) | `prompts/*.md` (deprecated, global only) | `~/.codex/` (`CODEX_HOME`) | `.codex/agents/`, `.agents/skills/`, `AGENTS.md` | **P0** |
 | **Gemini CLI** | *(verify: extensions / GEMINI.md)* | *(verify)* | `commands/*.toml` | `~/.gemini/` | `.gemini/` | P1 |
 | **GitHub Copilot (VS Code)** | `agents/*.agent.md` *(verify)* | instructions files | `prompts/*.prompt.md` | VS Code user data | `.github/` | P1 |
 | **Cursor** | modes *(verify)* | rules `*.mdc` | `commands/*.md` *(verify)* | `~/.cursor/` | `.cursor/` | P1 |

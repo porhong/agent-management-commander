@@ -6,18 +6,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Agent Management Commander (AMC)** is an Electron desktop app for managing AI-agent assets across tools such as Claude Code, Codex CLI, Gemini CLI, Copilot, and Cursor. Those assets are agents, skills, commands, and workflows.
 
-The repo currently contains **only design docs**, and no code has been scaffolded yet. Before starting any work, read:
+Phase 0 is complete (see the outcome table in `docs/plan/phase-0-foundations.md`), and **Phase 1** (`docs/plan/phase-1-mvp.md`) is next. Before starting work, read:
+
 - `docs/concept/`: what and why (start with `README.md`, then `02-domain-model.md` and `03-tool-adapters-and-deployment.md`)
 - `docs/plan/`: the phased task list with task IDs (`P0-NN`, `T<phase>.<milestone>.<n>`) and acceptance criteria. Work should map to a task ID, and branch names follow `feat/<task-id>-short-name`.
 
-The next work is **Phase 0** (`docs/plan/phase-0-foundations.md`). When the monorepo is scaffolded (P0-03), replace the "Planned commands" section below with the real commands.
+## Commands
 
-## Planned commands (from the plan; not yet available)
+Bun workspaces monorepo (Bun is the package manager and script runner). The tool CLIs and the app run on Node 24 (`.nvmrc`). Workspaces are `apps/desktop`, `packages/core`, and `packages/adapters/*`.
 
-- `pnpm dev`: run the Electron app (electron-vite)
-- `pnpm build:win`: package the Windows installer (electron-builder)
-- `pnpm vitest run <path-or-pattern>`: run tests (Vitest workspace); `pnpm vitest run -t "<name>"` runs a single test
-- `AMC_REAL_HOME=1`: opt-in, **read-only** tests against the developer's real `~/.claude` and `~/.codex`. All other tests must use an isolated temp `HOME`.
+- `bun run dev`: run the Electron app (electron-vite, hot reload). The first run downloads the Electron binary, because Electron 44 has no postinstall.
+- `bun run build:win`: package the Windows NSIS installer into `apps/desktop/release/`. Set `CSC_IDENTITY_AUTO_DISCOVERY=false` for unsigned local builds.
+- `bun run lint`, `bun run typecheck` (`tsc` per package), `bun run format:check`, `bun run format`
+- `bun run test`: runs all Vitest tests from the single root `vitest.config.ts`. **Not `bun test`**, which starts Bun's own test runner and fails.
+  - One file or folder: `bunx vitest run packages/adapters/claude-code`
+  - One test by name: `bunx vitest run -t "round-trips every fixture"`
+  - Update golden snapshots **only after reviewing the diff**: `bunx vitest run -u`
+- `bun run --filter @amc/core schema`: regenerate `packages/core/schema/*.json` after changing Zod manifests. A test fails if they are stale.
+- `AMC_REAL_HOME=1 bunx vitest run packages/adapters/claude-code`: opt-in, **read-only** round-trip against the real `~/.claude`. All other tests use fixtures, `MemFs`, or temp dirs.
+- `AMC_SMOKE=1 "<app>.exe"`: the headless smoke mode. The packaged app prints a JSON probe (versions, SQLite/FTS5) and exits. CI uses this.
+
+## Toolchain constraints (don't "upgrade" past these without checking)
+
+- **TypeScript 6.0**, not 7, because typescript-eslint doesn't support 7 yet. **Vite 7**, because electron-vite 5 needs it. `@vitejs/plugin-react` 5.x.
+- **Tests run under Node through Vitest, not Bun.** The app ships on Electron's Node, and `node:sqlite` is a Node module, so tests must use the same runtime. Only package scripts (for example the schema generator) run directly on Bun.
+- Bun uses its isolated linker: packages live in `node_modules/.bun/` and are symlinked into place, so phantom (undeclared) dependencies don't resolve. Packages whose install scripts must run go in root `trustedDependencies`.
+- **SQLite is the built-in `node:sqlite`.** Don't add native modules like better-sqlite3: they need an MSVC toolchain that isn't installed.
+- Workspace packages export TypeScript source (`"exports": "./src/index.ts"`). `electron.vite.config.ts` must list them in `externalizeDeps.exclude` so they get bundled.
+- The desktop package is CommonJS output (no `"type": "module"`) because the sandboxed preload can't be ESM.
+- `fixtures/**` are byte-exact test data (`-text` in `.gitattributes`, and Prettier ignores them). Don't reformat them.
 
 ## Architecture (the big picture)
 
@@ -27,15 +44,21 @@ The next work is **Phase 0** (`docs/plan/phase-0-foundations.md`). When the mono
   - command → agent and preloaded skills
   - workflow → steps
   - skill → `dependsOn` other skills
-- **Adapters** (`packages/adapters/<tool>`) implement `ToolAdapter`: `detect`, `capabilities`, `paths`, `scan`, `compile`, `parse`.
-  - `compile` must stay **pure**: it takes a `ResolvedItem` and returns `CompiledFile[]`, and adapters never touch the library.
+- **Adapters** (`packages/adapters/<tool>`) implement `ToolAdapter` (a draft in `packages/core/src/adapter/types.ts`, growing to `detect`, `capabilities`, `paths`, `scan`, `compile`, `parse` in M1.3).
+  - `compile` must stay **pure**: it takes an item and returns `CompiledFile[]`, and adapters never touch the library.
   - If a tool lacks a feature, the adapter applies a degradation and reports it as an `adaptation`. Permissions are never widened silently.
-  - Unknown native fields are preserved in `compat.overrides.<tool>.raw`.
+- **Lossless round-trips through `compat.overrides.<tool>`:**
+  - Canonical fields hold abstract values: permissions like `read`, `search`, `shell`, and model tiers `fast`, `balanced`, `powerful`.
+  - When mapping a native value is lossy, the adapter stores the exact native value under the same key in the override block, and `compile` prefers it.
+  - Unmodeled frontmatter goes to `…raw`.
+  - Each adapter documents its mapping in `FORMAT.md` §8. Round-trip equality is **semantic** (frontmatter values plus body), not byte-level.
+- **Command templates** use `{{args}}` and `{{name}}` placeholders. A literal `{{` is escaped as `\{{` (`packages/core/src/adapter/placeholders.ts`).
+- **Links:** skill folders reached through a symlink or junction (common with `~/.agents/skills`) are read but never written through.
 - **The deploy pipeline** runs: resolve closure → validate → compile → **plan** → snapshot → atomic write → lockfile.
   - No code path writes to a target without a plan.
   - The plan carries `readHashes`, and apply rejects a stale plan.
 - **Ownership** is recorded in `.amc-lock.json` in each target root.
-  - Files outside the lockfile are *foreign*, and AMC never modifies them.
+  - Files outside the lockfile are _foreign_, and AMC never modifies them.
   - For shared files like `AGENTS.md`, AMC owns only the regions between `<!-- amc:begin <id> -->` and `<!-- amc:end <id> -->`.
 - **Package boundaries:**
   - `packages/core` and `packages/adapters/*` must never import `electron` (enforced by lint).
@@ -52,4 +75,4 @@ The next work is **Phase 0** (`docs/plan/phase-0-foundations.md`). When the mono
 
 ## Unverified facts
 
-Tool file paths and formats in the concept docs that are marked *(verify)* are assumptions. Check them against current tool docs and real folders before implementing an adapter. Record the verified results in `packages/adapters/<tool>/FORMAT.md` with fixtures in `fixtures/<tool>/`.
+Claude Code and Codex formats are verified in `packages/adapters/{claude-code,codex-cli}/FORMAT.md`, although items there marked UNCONFIRMED still need checking. Other tools' paths in the concept docs are assumptions. Before implementing an adapter, verify them against current tool docs and real folders. Record the results in `packages/adapters/<tool>/FORMAT.md`, with fixtures in `fixtures/<tool>/`.

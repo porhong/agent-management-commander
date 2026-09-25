@@ -1,0 +1,17 @@
+{
+  "name": "@amc/adapter-claude-code",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "AMC adapter for Claude Code (~/.claude, .claude/).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@amc/core": "workspace:*",
+    "yaml": "^2.9.1"
+  }
+}

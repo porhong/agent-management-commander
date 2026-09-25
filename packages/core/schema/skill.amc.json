@@ -1,0 +1,131 @@
+{
+  "$id": "https://amc.dev/schema/skill.amc.json",
+  "title": "AMC skill manifest (amc.yaml)",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "maxLength": 80,
+      "pattern": "^(skill|agent|command|workflow)\\.[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "slug": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "version": {
+      "default": "0.1.0",
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1536
+    },
+    "tags": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40
+      }
+    },
+    "author": {
+      "type": "string"
+    },
+    "license": {
+      "type": "string"
+    },
+    "compat": {
+      "type": "object",
+      "properties": {
+        "exclude": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          }
+        },
+        "overrides": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "raw": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            },
+            "additionalProperties": {}
+          }
+        }
+      }
+    },
+    "kind": {
+      "type": "string",
+      "const": "skill"
+    },
+    "triggers": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "dependsOn": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 80,
+        "pattern": "^(skill|agent|command|workflow)\\.[a-z0-9]+(-[a-z0-9]+)*$"
+      }
+    },
+    "allowedTools": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*(:[a-z0-9*_.-]+)?$"
+      }
+    },
+    "scripts": {
+      "type": "object",
+      "properties": {
+        "trust": {
+          "default": "owned",
+          "type": "string",
+          "enum": [
+            "untrusted",
+            "reviewed",
+            "owned"
+          ]
+        }
+      }
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "slug",
+    "description",
+    "kind"
+  ]
+}

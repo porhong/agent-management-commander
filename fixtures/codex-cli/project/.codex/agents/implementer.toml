@@ -1,0 +1,4 @@
+name = "implementer"
+description = "Implements an approved plan with small, tested commits."
+sandbox_mode = "workspace-write"
+developer_instructions = "Implement the plan step by step. Run tests after each step."
