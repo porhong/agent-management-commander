@@ -5,6 +5,7 @@ import {
   Validator,
   buildGraph,
   looksBinary,
+  parseManifest,
   resolveClosure,
   targetId,
   type Content,
@@ -232,6 +233,8 @@ export function createHandlers({ services, dialog, probe }: HandlerDeps): Handle
         timestamp: h.timestamp,
       })),
 
+    'library.at': async ({ id, rev }) => wireItem(await library.at(id, rev)),
+
     'library.restore': async ({ id, rev }) => {
       const item = await library.restore(id, rev);
       index.upsertItem(item);
@@ -301,9 +304,29 @@ export function createHandlers({ services, dialog, probe }: HandlerDeps): Handle
     },
 
     // ---------- compile preview ----------
-    'compile.preview': async ({ id, target }) => {
+    'compile.preview': async ({ id, target, draft }) => {
       const t = toTarget(target);
-      const resolved = resolveClosure(buildGraph(await loadLibrary()), [id]).at(-1)!;
+      const items = await loadLibrary();
+      // An unsaved draft replaces its saved self in the graph, so the preview reflects the
+      // editor while its references still resolve against the real library.
+      const withDraft = draft
+        ? items.map((item) =>
+            item.manifest.id === id
+              ? {
+                  ...item,
+                  // Identity stays the saved one: a preview can't rename or re-kind an item.
+                  manifest: parseManifest({
+                    ...draft.manifest,
+                    id: item.manifest.id,
+                    kind: item.manifest.kind,
+                    slug: item.manifest.slug,
+                  }),
+                  body: draft.body,
+                }
+              : item,
+          )
+        : items;
+      const resolved = resolveClosure(buildGraph(withDraft), [id]).at(-1)!;
       return {
         files: adapters
           .get(t.toolId)

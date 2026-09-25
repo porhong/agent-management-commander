@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router';
+import { useCallback, useEffect, useState } from 'react';
+import { NavLink, Outlet, useNavigate } from 'react-router';
 import {
   Download,
   Grid3x3,
@@ -9,8 +10,10 @@ import {
   Settings,
   type LucideIcon,
 } from 'lucide-react';
+import { CommandPalette } from '@/components/command-palette';
+import { NewItemDialog } from '@/components/new-item-dialog';
 import { useQuery } from '@/lib/ipc';
-import { EDITABLE_KINDS, KINDS } from '@/lib/kinds';
+import { EDITABLE_KINDS, KINDS, type EditableKind } from '@/lib/kinds';
 
 interface NavItem {
   to: string;
@@ -56,11 +59,35 @@ function Section({ label, items }: { label: string; items: NavItem[] }) {
   );
 }
 
-export function AppShell({ onOpenPalette }: { onOpenPalette: () => void }) {
+export function AppShell() {
   const items = useQuery('library.list', {}, { on: ['library.changed'] });
   const status = useQuery('system.status', undefined, { on: ['library.changed'] });
+  const settings = useQuery('settings.get', undefined);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [newKind, setNewKind] = useState<EditableKind | null>(null);
+  const navigate = useNavigate();
 
   const countFor = (kind: string) => items.data?.filter((i) => i.kind === kind).length;
+
+  // Follows the OS unless Settings picks one (T1.6.1).
+  useEffect(() => {
+    const theme = settings.data?.['theme'];
+    if (theme === 'light' || theme === 'dark') document.documentElement.dataset['theme'] = theme;
+    else delete document.documentElement.dataset['theme'];
+  }, [settings.data]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const closePalette = useCallback(() => setPaletteOpen(false), []);
 
   return (
     <div className="flex h-full">
@@ -113,7 +140,7 @@ export function AppShell({ onOpenPalette }: { onOpenPalette: () => void }) {
         <header className="flex h-11 shrink-0 items-center gap-3 border-b px-3">
           <button
             type="button"
-            onClick={onOpenPalette}
+            onClick={() => setPaletteOpen(true)}
             className="flex h-7 w-full max-w-md items-center gap-2 rounded-sm border bg-background px-2 text-muted-foreground hover:border-ring/50 hover:text-foreground"
           >
             <Search className="size-3.5" aria-hidden />
@@ -126,6 +153,19 @@ export function AppShell({ onOpenPalette }: { onOpenPalette: () => void }) {
           <Outlet />
         </main>
       </div>
+
+      <CommandPalette open={paletteOpen} onClose={closePalette} onNewItem={setNewKind} />
+
+      {newKind && (
+        <NewItemDialog
+          kind={newKind}
+          onClose={() => setNewKind(null)}
+          onCreated={(id) => {
+            setNewKind(null);
+            navigate(`/item/${id}`);
+          }}
+        />
+      )}
     </div>
   );
 }

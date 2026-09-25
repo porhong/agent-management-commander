@@ -1,8 +1,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { RouterProvider, createMemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { App } from '../App';
+import { routes } from '../App';
 
 const ok = (value: unknown) => Promise.resolve({ ok: true, value });
 
@@ -52,6 +52,11 @@ beforeEach(() => {
       search: () => ok([]),
       graph: () => ok({ edges: [] }),
       templates: () => ok([]),
+      validate: () => ok({ issues: [] }),
+      get: (input: { id: string }) => {
+        const row = ROWS.find((r) => r.id === input.id)!;
+        return ok({ manifest: { ...row }, body: '', files: {} });
+      },
     },
     system: {
       status: () =>
@@ -65,6 +70,7 @@ beforeEach(() => {
     settings: { get: () => ok({ theme }) },
     deploy: { matrix: () => ok([]) },
     tools: { detect: () => ok([]) },
+    targets: { list: () => ok([]) },
     index: { rebuild },
     on: () => () => {},
   };
@@ -72,9 +78,7 @@ beforeEach(() => {
 
 const renderApp = () =>
   render(
-    <MemoryRouter initialEntries={['/library/skill']}>
-      <App />
-    </MemoryRouter>,
+    <RouterProvider router={createMemoryRouter(routes, { initialEntries: ['/library/skill'] })} />,
   );
 
 describe('app shell (T1.6.1)', () => {
@@ -138,11 +142,7 @@ describe('ipc calls', () => {
       index: { rebuild },
       on: () => () => {},
     };
-    render(
-      <MemoryRouter initialEntries={['/']}>
-        <App />
-      </MemoryRouter>,
-    );
+    render(<RouterProvider router={createMemoryRouter(routes, { initialEntries: ['/'] })} />);
     await screen.findByText(/3 items across 2 targets/);
     expect(seen.length).toBeGreaterThan(0);
     for (const args of seen) expect(args.filter((a) => a !== undefined)).toEqual([]);
@@ -161,7 +161,7 @@ describe('command palette (T1.6.2)', () => {
     await user.keyboard('{Enter}');
 
     // The command from the palette, not the skill list behind it.
-    expect(await screen.findByRole('heading', { name: 'Item editor' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Review PR' })).toBeInTheDocument();
   });
 
   it('runs an action and closes', async () => {

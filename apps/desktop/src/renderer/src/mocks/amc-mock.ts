@@ -190,6 +190,10 @@ const impl: Record<string, (input?: unknown) => Promise<{ ok: true; value: unkno
         timestamp: '2026-09-01T08:00:00.000Z',
       },
     ]),
+  'library.at': (input) => {
+    const { id } = (input ?? {}) as { id: string };
+    return ok({ ...item(id), body: (BODIES[id] ?? '') + 'A line that was later removed.\n' });
+  },
   'library.restore': (input) => ok(item(((input ?? {}) as { id: string }).id)),
   'library.templates': () =>
     ok([

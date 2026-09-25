@@ -152,13 +152,21 @@ interface TargetPlan {
 | T1.6.7 | Validation surface | Inline field errors, plus an issues panel with "Fix" actions where the rule provides one | Every rule from T1.2.5 renders correctly |
 | T1.6.8 | Relations & history tabs | Relations: plain lists of "uses" and "used by" (a graph view is deferred). History: git log, diff, and restore | Restore creates a commit and refreshes the editor |
 
-> **M1.6 progress (2026-09-25):** T1.6.1–T1.6.3 are done in `apps/desktop/src/renderer/`; the editor (T1.6.4–T1.6.8) is next. Decisions:
+> **M1.6 progress (2026-09-25):** done. T1.6.1–T1.6.3 landed first (frame, list, palette), then T1.6.4–T1.6.8 (the editor). Decisions:
 > - **Visual direction** follows concept 04 §5 rather than inventing one: a dense developer-tool surface, monospace for ids and paths, colour reserved for the four item kinds and the five sync statuses. **No web fonts** — the app is offline under `default-src 'self'`, so it uses the OS UI face and Cascadia Code/Consolas.
 > - **Renderer tests run in jsdom** as a second Vitest project (`--project renderer`), with `@testing-library/react`. The node project still covers core, main, and shared.
 > - **Data access** is a ~100-line `useQuery`/`useAction` pair over the IPC contract, refreshed by `library.changed` events. A query library would be overhead for one source with no cache to invalidate.
 > - Added `library.graph`, so a list shows "used by" counts for every row in one call instead of N.
 > - `AMC_SCREENSHOT=<png>` (with optional `AMC_SCREENSHOT_ROUTE`) renders the app and exits, which is how the UI is reviewed without a visible desktop and how M1.10's E2E will capture screens.
 > - Found by the screenshot, not by the tests: `useQuery` passed `null` to channels declaring `z.void()`, which rejects it, so the dashboard silently showed zeros. Fixed, with a test that asserts void channels are called with no argument.
+>
+> Editor decisions (T1.6.4–T1.6.8):
+> - **CodeMirror 6, not Monaco.** Monaco puts its language services in web workers, and the renderer is loaded from `file://` under `script-src 'self'`, where a worker cannot be constructed. CodeMirror needs none, so highlighting and completion work under the app's real CSP, at a fraction of the bundle. `components/editor/code-editor.tsx` is the only place that knows this.
+> - **JSON Schema hints** are a documented field table (`lib/manifest-fields.ts`) offered as YAML completions. The generated schemas carry shapes but no prose, because they come from Zod; a test asserts the table lists exactly the keys each schema accepts, so the two cannot drift.
+> - **The app is now a data router** (`createHashRouter`), because `useBlocker` — the unsaved-changes guard — only works with one. The palette, the New dialog and the theme moved into `AppShell` so they sit inside the router.
+> - **The preview compiles the draft, not the saved item.** `compile.preview` gained an optional `draft`; main swaps it into the graph so its references still resolve, and the identity fields stay the saved ones. Nothing is written to preview an edit.
+> - **Added `library.at`**, a read-only “item at a revision”, so History can diff before it restores. “Compare with what is installed” reuses `deploy.plan`, which reads but never writes.
+> - The tab and form/YAML choice live in the URL (`?tab=…&mode=yaml`), so links and the back button work. Found by screenshot again: opening `?mode=yaml` directly left the manifest editor empty, because only the toggle seeded it.
 
 ## M1.7: Deploy UI
 

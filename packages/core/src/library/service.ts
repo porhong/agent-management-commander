@@ -249,6 +249,11 @@ export class LibraryService {
    * Brings back the content `id` had at `rev`, as a new commit and a new version. The item keeps
    * its current slug even if it was renamed since.
    */
+  /** The item as it was at `rev`, without touching the working tree. Read-only. */
+  at(id: ItemId, rev: string): Promise<LibraryItem> {
+    return this.readAtRev(id, rev);
+  }
+
   restore(id: ItemId, rev: string): Promise<LibraryItem> {
     return this.serial(async () => {
       const current = await this.get(id);

@@ -22,6 +22,22 @@ Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
   }),
 });
 
+// CodeMirror measures text by asking a Range for its rectangles, which jsdom does not implement.
+const EMPTY_RECT = {
+  width: 0,
+  height: 16,
+  top: 0,
+  left: 0,
+  bottom: 16,
+  right: 0,
+  x: 0,
+  y: 0,
+  toJSON: () => ({}),
+};
+Range.prototype.getClientRects = () =>
+  Object.assign([EMPTY_RECT], { item: () => EMPTY_RECT }) as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect = () => EMPTY_RECT as DOMRect;
+
 vi.stubGlobal(
   'ResizeObserver',
   class {

@@ -1,6 +1,5 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { HashRouter } from 'react-router';
 import { App } from './App';
 import './index.css';
 
@@ -12,10 +11,7 @@ async function start() {
   }
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      {/* Hash routing: the packaged app is loaded from file://, which has no history server. */}
-      <HashRouter>
-        <App />
-      </HashRouter>
+      <App />
     </StrictMode>,
   );
 }

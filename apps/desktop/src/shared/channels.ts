@@ -21,6 +21,7 @@ export const CHANNEL_NAMES = [
   'library.relations',
   'library.graph',
   'library.history',
+  'library.at',
   'library.restore',
   'library.templates',
   'library.validate',
