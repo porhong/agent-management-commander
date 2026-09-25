@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "build:win": "electron-vite build && electron-builder --win",
+    "build:win": "electron-vite build && electron-builder --win --publish never",
     "preview": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
     "e2e": "playwright test",
