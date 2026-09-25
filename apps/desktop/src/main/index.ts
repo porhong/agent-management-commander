@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { BrowserWindow, app, dialog, utilityProcess } from 'electron';
 import { createAppServices } from './app-services';
@@ -94,7 +95,33 @@ if (!app.requestSingleInstanceLock()) {
       void services.logger.flush();
     });
 
-    createWindow();
+    const win = createWindow();
+
+    // Dev/CI capture: render the app, write a PNG, and exit. Used to review the UI without a
+    // visible desktop, and by the E2E suite in M1.10.
+    const shotPath = process.env['AMC_SCREENSHOT'];
+    if (shotPath) {
+      win.webContents.once('did-finish-load', () => {
+        const route = process.env['AMC_SCREENSHOT_ROUTE'];
+        if (route) {
+          void win.webContents.executeJavaScript(`location.hash = ${JSON.stringify(route)}`);
+        }
+        setTimeout(
+          () => {
+            void win.webContents
+              .capturePage()
+              .then((image) => writeFile(shotPath, image.toPNG()))
+              .then(() => app.exit(0))
+              .catch((err: unknown) => {
+                process.stderr.write(`${String(err)}\n`);
+                app.exit(1);
+              });
+          },
+          Number(process.env['AMC_SCREENSHOT_DELAY'] ?? 1500),
+        );
+      });
+    }
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });

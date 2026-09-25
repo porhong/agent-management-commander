@@ -185,6 +185,15 @@ export const ipcContract = {
       usedBy: z.array(z.object({ id: itemId, relation: z.string(), mode: z.string().nullable() })),
     }),
   },
+  /** Every reference edge at once, so a list can show "used by" counts without N calls. */
+  'library.graph': {
+    input: z.void(),
+    output: z.object({
+      edges: z.array(
+        z.object({ from: itemId, to: itemId, relation: z.string(), mode: z.string().nullable() }),
+      ),
+    }),
+  },
   'library.history': {
     input: z.object({ id: itemId }),
     output: z.array(z.object({ rev: z.string(), summary: z.string(), timestamp: z.string() })),

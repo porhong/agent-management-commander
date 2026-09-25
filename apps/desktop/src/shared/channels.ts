@@ -19,6 +19,7 @@ export const CHANNEL_NAMES = [
   'library.duplicate',
   'library.delete',
   'library.relations',
+  'library.graph',
   'library.history',
   'library.restore',
   'library.templates',

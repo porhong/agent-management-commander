@@ -154,6 +154,29 @@ const impl: Record<string, (input?: unknown) => Promise<{ ok: true; value: unkno
       uses: [{ id: 'skill.security-checklist', relation: 'equips', mode: 'always' }],
       usedBy: [{ id: 'command.review-pr', relation: 'uses-agent', mode: null }],
     }),
+  'library.graph': () =>
+    ok({
+      edges: [
+        {
+          from: 'agent.code-reviewer',
+          to: 'skill.security-checklist',
+          relation: 'equips',
+          mode: 'always',
+        },
+        {
+          from: 'agent.code-reviewer',
+          to: 'skill.style-guide',
+          relation: 'equips',
+          mode: 'on-demand',
+        },
+        {
+          from: 'command.review-pr',
+          to: 'agent.code-reviewer',
+          relation: 'uses-agent',
+          mode: null,
+        },
+      ],
+    }),
   'library.history': () =>
     ok([
       {

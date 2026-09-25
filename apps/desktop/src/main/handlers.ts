@@ -218,6 +218,13 @@ export function createHandlers({ services, dialog, probe }: HandlerDeps): Handle
       usedBy: index.usedBy(id).map((r) => ({ id: r.from, relation: r.relation, mode: r.mode })),
     }),
 
+    'library.graph': () => ({
+      edges: index
+        .listItems()
+        .flatMap((row) => index.uses(row.id))
+        .map((r) => ({ from: r.from, to: r.to, relation: r.relation, mode: r.mode })),
+    }),
+
     'library.history': async ({ id }) =>
       (await library.history(id)).map((h) => ({
         rev: h.rev,

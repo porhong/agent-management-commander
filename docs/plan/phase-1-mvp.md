@@ -152,6 +152,14 @@ interface TargetPlan {
 | T1.6.7 | Validation surface | Inline field errors, plus an issues panel with "Fix" actions where the rule provides one | Every rule from T1.2.5 renders correctly |
 | T1.6.8 | Relations & history tabs | Relations: plain lists of "uses" and "used by" (a graph view is deferred). History: git log, diff, and restore | Restore creates a commit and refreshes the editor |
 
+> **M1.6 progress (2026-09-25):** T1.6.1–T1.6.3 are done in `apps/desktop/src/renderer/`; the editor (T1.6.4–T1.6.8) is next. Decisions:
+> - **Visual direction** follows concept 04 §5 rather than inventing one: a dense developer-tool surface, monospace for ids and paths, colour reserved for the four item kinds and the five sync statuses. **No web fonts** — the app is offline under `default-src 'self'`, so it uses the OS UI face and Cascadia Code/Consolas.
+> - **Renderer tests run in jsdom** as a second Vitest project (`--project renderer`), with `@testing-library/react`. The node project still covers core, main, and shared.
+> - **Data access** is a ~100-line `useQuery`/`useAction` pair over the IPC contract, refreshed by `library.changed` events. A query library would be overhead for one source with no cache to invalidate.
+> - Added `library.graph`, so a list shows "used by" counts for every row in one call instead of N.
+> - `AMC_SCREENSHOT=<png>` (with optional `AMC_SCREENSHOT_ROUTE`) renders the app and exits, which is how the UI is reviewed without a visible desktop and how M1.10's E2E will capture screens.
+> - Found by the screenshot, not by the tests: `useQuery` passed `null` to channels declaring `z.void()`, which rejects it, so the dashboard silently showed zeros. Fixed, with a test that asserts void channels are called with no argument.
+
 ## M1.7: Deploy UI
 
 | ID | Task | Deliverables | Acceptance |
