@@ -6,7 +6,12 @@ export type AmcErrorCode =
   | 'MANIFEST_INVALID'
   | 'MANIFEST_PARSE_FAILED'
   | 'ITEM_LAYOUT_INVALID'
-  | 'NATIVE_PARSE_FAILED';
+  | 'NATIVE_PARSE_FAILED'
+  | 'ITEM_NOT_FOUND'
+  | 'SLUG_TAKEN'
+  | 'ITEM_REFERENCED'
+  | 'TEMPLATE_NOT_FOUND'
+  | 'GIT_FAILED';
 
 export class AmcError extends Error {
   constructor(

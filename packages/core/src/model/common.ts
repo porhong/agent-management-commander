@@ -67,5 +67,8 @@ export const baseManifestShape = {
   tags: z.array(z.string().min(1).max(40)).default([]),
   author: z.string().optional(),
   license: z.string().optional(),
+  /** ISO timestamps maintained by LibraryService. Metadata only: changing them never bumps version. */
+  createdAt: z.iso.datetime({ offset: true }).optional(),
+  updatedAt: z.iso.datetime({ offset: true }).optional(),
   compat: compatSchema.optional(),
 };

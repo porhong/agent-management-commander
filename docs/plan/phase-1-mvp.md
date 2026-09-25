@@ -30,6 +30,12 @@
 | T1.1.5 | Git history | `GitService` (isomorphic-git): init the repo, auto-commit on each save with the message `amc: update skill.security-checklist (1.3.0)`, `log(itemPath)`, `show(rev, path)`, `restore(rev, itemPath)` | History for one item lists only its commits. Restore creates a new commit |
 | T1.1.6 | Item templates | Built-in starter templates per kind (e.g. "Checklist skill", "Reviewer agent", "Slash command with args") as data in core | `create({ template })` yields a valid item |
 
+> **M1.1 outcome (2026-09-25):** done in `packages/core/src/library/` (`bootstrap.ts`, `service.ts`, `git.ts`, `templates.ts`, `versioning.ts`). Decisions beyond the table:
+> - `createdAt`/`updatedAt` live in `amc.yaml` as optional ISO fields. Metadata-only fields (`tags`, `author`, `license`, timestamps) never bump the version. Rename counts as a content change (it changes deployed file names), so it bumps patch.
+> - A freed slug gets a suffixed id (`skill.sec-2`) if a renamed item still holds `skill.sec`.
+> - Each commit carries an `Amc-Item: <id>` trailer. `history(id)` filters on it, so an item's history survives renames. `restore` lives in `LibraryService`: it finds the item at the old revision by id (not by folder), keeps the current slug, and writes a new version.
+> - `LibraryService` depends on a `LibraryHistory` interface (`NoHistory` for `MemFs` tests). `GitService` is the only core code that touches disk without `FsPort`, because isomorphic-git needs a node-style fs client.
+
 ## M1.2: Resolver & validator
 
 | ID | Task | Deliverables | Acceptance |

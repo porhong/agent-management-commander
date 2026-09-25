@@ -12,6 +12,7 @@
     "schema": "bun scripts/generate-schema.ts"
   },
   "dependencies": {
+    "isomorphic-git": "^1.42.2",
     "yaml": "^2.9.1",
     "zod": "^4.6.5"
   }
