@@ -26,8 +26,12 @@ Bun workspaces monorepo (Bun is the package manager and script runner). The tool
 - `AMC_REAL_HOME=1 bunx vitest run packages/adapters/claude-code`: opt-in, **read-only** round-trip against the real `~/.claude`. All other tests use fixtures, `MemFs`, or temp dirs.
 - `AMC_SMOKE=1 "<app>.exe"`: the headless smoke mode. The packaged app prints a JSON probe (versions, SQLite/FTS5) and exits. Also setting `AMC_HOME=<dir>` boots the real services against that home and reports `{ok, items, targets, fallbacks}`, which exercises the utility process. CI runs both.
 - `VITE_AMC_MOCK=1 bun run dev`: runs the renderer against fixture data (`renderer/src/mocks/amc-mock.ts`) with no real core behind it.
+- `AMC_TOOL_HOME=<dir>`: points the **adapters** at a throwaway home, so a real deploy writes to `<dir>/.claude` instead of yours. Use it (with `AMC_HOME`) whenever a dev run might apply a plan. Overriding `USERPROFILE` instead crashes Electron on Windows.
+- `bun run e2e`: the user journeys through the real Electron app (Playwright `_electron`, `apps/desktop/e2e/`). Needs `bun run --filter @amc/desktop build` first. Each test gets its own temp `AMC_HOME` and `AMC_TOOL_HOME`, so a journey can apply a real deploy.
+- `bun run notices`: regenerates `THIRD-PARTY-NOTICES.md`. `bun run --filter @amc/desktop icon`: regenerates the app icon from the palette.
+- `AMC_SCREENSHOT=<png>` renders the app and exits; `AMC_SCREENSHOT_ROUTE` sets the hash route and `AMC_SCREENSHOT_CLICK="A|B"` clicks those labels in order first. This is how UI work is reviewed without a visible desktop.
 
-> Running Electron from a shell that exports `ELECTRON_RUN_AS_NODE=1` silently starts plain Node, and `require('electron').app` is then undefined. Clear it first.
+> Running Electron from a shell that exports `ELECTRON_RUN_AS_NODE=1` silently starts plain Node, and `require('electron').app` is then undefined. **Delete** the variable — setting it to `''` still counts as set, and Electron will still start as Node.
 
 ## Toolchain constraints (don't "upgrade" past these without checking)
 
@@ -60,6 +64,7 @@ Bun workspaces monorepo (Bun is the package manager and script runner). The tool
   - Each adapter documents its mapping in `FORMAT.md` §8. Round-trip equality is **semantic** (frontmatter values plus body), not byte-level.
 - **Command templates** use `{{args}}` and `{{name}}` placeholders. A literal `{{` is escaped as `\{{` (`packages/core/src/adapter/placeholders.ts`).
 - **Links:** skill folders reached through a symlink or junction (common with `~/.agents/skills`) are read but never written through.
+- **Import never writes to a tool folder** (S6). `packages/core/src/import/` scans through the adapters, groups what it finds (slug, then content similarity), and `adopt` writes library items only. Telling AMC it now owns those files is a separate deploy the user reviews: a byte-identical file becomes an `unchanged` change that records its lock entry without being rewritten.
 - **The deploy pipeline** runs: resolve closure → validate → compile → **plan** → snapshot → atomic write → lockfile.
   - No code path writes to a target without a plan.
   - The plan carries `readHashes`, and apply rejects a stale plan.
@@ -75,6 +80,7 @@ Bun workspaces monorepo (Bun is the package manager and script runner). The tool
   - Every IPC channel is declared in `apps/desktop/src/shared/ipc-contract.ts` and Zod-validated in main. Adding a channel means adding it to `shared/channels.ts` too (a test keeps the two in step), because the sandboxed preload builds `window.amc` from that plain list and must stay Zod-free.
   - There is no generic filesystem channel, and **the renderer never passes a path**: folders come from `dialog.pickFolder` as an opaque token that only `main/path-tokens.ts` can resolve.
   - Deploy plans live in main (`AppServices.plans`); the renderer only ever holds a `planId`.
+- **Drift is checked, not watched.** `packages/core/src/status/drift.ts` hashes every path a lockfile claims and reports `drifted`/`missing`; the renderer re-runs it on window focus and every five minutes (`lib/drift.ts`). It never looks at files AMC does not own — finding those is Import's job — and a real watcher is Phase 2.
 - **The renderer is a data router.** `App.tsx` exports `routes`; `createHashRouter` wraps them (`createMemoryRouter` in tests). It has to be a data router because the item editor's unsaved-changes guard uses `useBlocker`. `AppShell` is the layout route and owns the palette, the New dialog, and the theme.
 - **App wiring:** `main/app-services.ts` builds core services from `~/.amc`, `main/handlers.ts` maps contract channels to them (no Electron imports, so it is unit-tested), and `main/ipc-router.ts` is the only Electron binding. Heavy library scans run in a `utilityProcess` (`main/worker/`) that falls back in-process.
 - **The index (`packages/core/src/index-store/`) is a cache.** Deployments and the deploy matrix are derived from the mirrored lockfiles, so a rebuild reproduces them; an outdated schema is dropped, never migrated.

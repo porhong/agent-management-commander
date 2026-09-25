@@ -1,10 +1,12 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { BrowserWindow, app, dialog, utilityProcess } from 'electron';
+import { nodeAdapterHost } from '@amc/core';
+import { BrowserWindow, app, dialog, shell, utilityProcess } from 'electron';
 import { createAppServices } from './app-services';
-import { createHandlers, type DialogPort } from './handlers';
+import { createHandlers, type DialogPort, type ShellPort } from './handlers';
 import { createEmitter, registerIpc } from './ipc-router';
 import { probeSqlite } from './sqlite-probe';
+import { createUpdater } from './updater';
 import { createWindow } from './window';
 import type { WorkerPort } from './worker/client';
 
@@ -27,6 +29,26 @@ const electronDialog: DialogPort = {
   },
 };
 
+const electronShell: ShellPort = {
+  async openPath(path) {
+    // `openPath` resolves to '' on success and an error message otherwise.
+    return (await shell.openPath(path)) === '';
+  },
+  relaunch() {
+    app.relaunch();
+    app.exit(0);
+  },
+};
+
+/**
+ * Dev and E2E only: point the adapters at a throwaway home so a real deploy lands there instead
+ * of the user's `~/.claude`. Overriding `USERPROFILE` instead crashes Electron on Windows.
+ */
+const toolHost = () => {
+  const home = process.env['AMC_TOOL_HOME'];
+  return home ? { host: { ...nodeAdapterHost(), home } } : {};
+};
+
 /** Spawns the scan worker (T1.5.5); the client falls back in-process if this throws. */
 const spawnWorker = (): WorkerPort =>
   utilityProcess.fork(join(__dirname, 'worker.js'), [], {
@@ -41,6 +63,7 @@ async function bootServices() {
       home: process.env['AMC_HOME']!,
       spawnWorker,
       onWorkerFallback: (reason) => fallbacks.push(reason),
+      ...toolHost(),
     });
     const { items } = await services.refreshIndex();
     const targets = services.targets().length;
@@ -78,11 +101,21 @@ if (!app.requestSingleInstanceLock()) {
       emit,
       spawnWorker,
       ...(process.env['AMC_HOME'] ? { home: process.env['AMC_HOME'] } : {}),
+      ...toolHost(),
     });
     const log = services.logger.child('main');
 
     registerIpc(
-      createHandlers({ services, dialog: electronDialog, probe: systemProbe }),
+      createHandlers({
+        services,
+        dialog: electronDialog,
+        probe: systemProbe,
+        shell: electronShell,
+        version: app.getVersion(),
+        updater: createUpdater((percent, updateVersion) =>
+          emit('update.progress', { percent, ...(updateVersion && { version: updateVersion }) }),
+        ),
+      }),
       (channel, err) =>
         log.error('ipc handler failed', {
           channel,
@@ -101,24 +134,44 @@ if (!app.requestSingleInstanceLock()) {
     // visible desktop, and by the E2E suite in M1.10.
     const shotPath = process.env['AMC_SCREENSHOT'];
     if (shotPath) {
-      win.webContents.once('did-finish-load', () => {
-        const route = process.env['AMC_SCREENSHOT_ROUTE'];
-        if (route) {
-          void win.webContents.executeJavaScript(`location.hash = ${JSON.stringify(route)}`);
-        }
-        setTimeout(
-          () => {
-            void win.webContents
-              .capturePage()
-              .then((image) => writeFile(shotPath, image.toPNG()))
-              .then(() => app.exit(0))
-              .catch((err: unknown) => {
-                process.stderr.write(`${String(err)}\n`);
-                app.exit(1);
-              });
-          },
-          Number(process.env['AMC_SCREENSHOT_DELAY'] ?? 1500),
+      const step = Number(process.env['AMC_SCREENSHOT_DELAY'] ?? 1500);
+      const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+      /** Clicks the first button or link whose text contains `label`. Throws if there is none. */
+      const clickByText = (label: string) =>
+        win.webContents.executeJavaScript(
+          `(() => {
+             const wanted = ${JSON.stringify(label)};
+             const el = [...document.querySelectorAll('button,a,[role="button"]')]
+               .find((e) => !e.disabled && (e.textContent || '').includes(wanted));
+             if (!el) throw new Error('nothing to click: ' + wanted);
+             el.click();
+           })()`,
         );
+
+      win.webContents.once('did-finish-load', () => {
+        void (async () => {
+          try {
+            const route = process.env['AMC_SCREENSHOT_ROUTE'];
+            if (route) {
+              await win.webContents.executeJavaScript(`location.hash = ${JSON.stringify(route)}`);
+            }
+            await wait(step);
+            // `A|B` clicks A, waits, then clicks B — enough to reach a dialog before capturing.
+            for (const label of (process.env['AMC_SCREENSHOT_CLICK'] ?? '')
+              .split('|')
+              .filter(Boolean)) {
+              await clickByText(label);
+              await wait(step);
+            }
+            const image = await win.webContents.capturePage();
+            await writeFile(shotPath, image.toPNG());
+            app.exit(0);
+          } catch (err) {
+            process.stderr.write(`${String(err)}\n`);
+            app.exit(1);
+          }
+        })();
       });
     }
 

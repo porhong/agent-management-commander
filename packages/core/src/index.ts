@@ -7,6 +7,8 @@ export * from './resolver';
 export * from './validator';
 export * from './adapter';
 export * from './deploy';
+export * from './import';
+export * from './status';
 export * from './index-store';
 export * from './settings';
 export * from './log';

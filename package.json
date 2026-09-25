@@ -23,7 +23,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "e2e": "bun run --filter @amc/desktop e2e",
+    "notices": "node scripts/third-party-notices.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -116,9 +116,62 @@ export const ipcContract = {
     input: z.void(),
     output: z.object({
       ready: z.boolean(),
+      /** The app's own version, so no screen has to hardcode it. */
+      version: z.string(),
       home: z.string(),
       warnings: z.array(z.string()),
       counts: z.record(z.string(), z.number()),
+    }),
+  },
+
+  /** Opens a folder AMC owns in the OS file manager. The renderer names it, never its path. */
+  'system.reveal': {
+    input: z.object({ what: z.enum(['home', 'library', 'logs']) }),
+    output: z.object({ opened: z.boolean() }),
+  },
+  /** Restarts the app, so a new library location takes effect. */
+  'system.relaunch': { input: z.void(), output: z.object({ relaunching: z.boolean() }) },
+
+  // ---------- updates (T1.10.4) ----------
+  /**
+   * Asks whether a newer release exists. Nothing is downloaded or installed as a side effect,
+   * and the whole thing is off when `settings.updates` says so.
+   */
+  'updates.check': {
+    input: z.void(),
+    output: z.object({
+      state: z.enum(['off', 'unsupported', 'current', 'available', 'error']),
+      version: z.string().optional(),
+      message: z.string().optional(),
+    }),
+  },
+  'updates.download': {
+    input: z.void(),
+    output: z.object({ downloaded: z.boolean(), message: z.string().optional() }),
+  },
+  /** Quits and installs what was downloaded. Does nothing if there is no download. */
+  'updates.install': { input: z.void(), output: z.object({ installing: z.boolean() }) },
+
+  // ---------- status (T1.9.3) ----------
+  /**
+   * Hashes every file AMC owns against the lockfile. Read-only, and cheap enough to run when
+   * the window regains focus, so an edit made in a tool folder shows up as drift.
+   */
+  'status.drift': {
+    input: z.void(),
+    output: z.object({
+      checkedAt: z.string(),
+      warnings: z.array(z.string()),
+      entries: z.array(
+        z.object({
+          targetId: z.string(),
+          root: z.string(),
+          relPath: z.string(),
+          region: z.string().optional(),
+          itemId: z.string(),
+          state: z.enum(['in-sync', 'drifted', 'missing']),
+        }),
+      ),
     }),
   },
 
@@ -239,6 +292,11 @@ export const ipcContract = {
         scope: z.enum(['global', 'project']),
         label: z.string(),
         root: z.string().optional(),
+        /**
+         * For project targets: the token that names this root back to main. Main issues it for
+         * a root the user already registered, so the renderer still never sends a path.
+         */
+        token: pathTokenSchema.optional(),
         roots: z.record(z.string(), z.string()),
       }),
     ),
@@ -266,6 +324,75 @@ export const ipcContract = {
       draft: z.object({ manifest: z.record(z.string(), z.unknown()), body: z.string() }).optional(),
     }),
     output: z.object({ files: z.array(compiledFileSchema) }),
+  },
+
+  // ---------- import (M1.8) ----------
+  /**
+   * Reads what the tools already have and proposes library items. Strictly read-only: a scan
+   * never writes to a tool folder or to the library.
+   */
+  'import.scan': {
+    input: z.object({ targetIds: z.array(z.string().max(300)).optional() }),
+    output: z.object({
+      scanId: z.string(),
+      fileCount: z.number(),
+      durationMs: z.number(),
+      warnings: z.array(z.string()),
+      groups: z.array(
+        z.object({
+          key: z.string(),
+          kind,
+          slug: z.string(),
+          name: z.string(),
+          description: z.string(),
+          body: z.string(),
+          /** An item already in the library that this would collide with. */
+          existingId: itemId.optional(),
+          canonicalId: z.string(),
+          sources: z.array(
+            z.object({
+              candidateId: z.string(),
+              targetId: z.string(),
+              toolId: z.string(),
+              label: z.string(),
+              relPath: z.string(),
+              linked: z.boolean(),
+              reason: z.enum(['same-slug', 'same-content', 'similar']),
+              similarity: z.number(),
+              warnings: z.array(z.string()),
+            }),
+          ),
+          suggestions: z.array(
+            z.object({ to: z.string(), relation: z.string(), evidence: z.string() }),
+          ),
+        }),
+      ),
+    }),
+  },
+  'import.adopt': {
+    input: z.object({
+      scanId: z.string().max(64),
+      items: z
+        .array(
+          z.object({
+            key: z.string().max(200),
+            slug,
+            candidateId: z.string().max(600).optional(),
+            links: z
+              .array(z.object({ to: z.string().max(200), relation: z.string().max(40) }))
+              .optional(),
+          }),
+        )
+        .min(1),
+    }),
+    output: z.object({
+      created: z.array(itemId),
+      skipped: z.array(z.object({ key: z.string(), reason: z.string() })),
+      /** References that could not be carried over, so the loss is never silent. */
+      notes: z.array(z.string()),
+      /** Where the adopted items came from, so the UI can offer to record ownership. */
+      targetIds: z.array(z.string()),
+    }),
   },
 
   // ---------- deploy ----------
@@ -300,6 +427,30 @@ export const ipcContract = {
         fileCount: z.number(),
       }),
     ),
+  },
+  /** What one past deploy actually did, read back from its snapshot manifest (T1.7.5). */
+  'deploy.report': {
+    input: z.object({ deployId: z.string().max(64) }),
+    output: z.object({
+      deployId: z.string(),
+      kind: z.enum(['deploy', 'rollback']),
+      createdAt: z.string(),
+      revertsDeployId: z.string().optional(),
+      targets: z.array(
+        z.object({
+          targetId: z.string(),
+          files: z.array(
+            z.object({
+              root: z.string(),
+              relPath: z.string(),
+              region: z.string().optional(),
+              itemId: z.string().optional(),
+              op: z.enum(['create', 'update', 'delete']),
+            }),
+          ),
+        }),
+      ),
+    }),
   },
   'deploy.planRollback': { input: z.object({ deployId: z.string().max(64) }), output: planSchema },
   'deploy.matrix': {
@@ -369,7 +520,10 @@ export const eventContract = {
     reason: z.enum(['create', 'update', 'rename', 'delete', 'restore', 'rebuild']),
   }),
   'targets.changed': z.object({ targetIds: z.array(z.string()) }),
+  /** Settings were written, so screens holding them (theme, onboarding) can catch up. */
+  'settings.changed': z.object({ keys: z.array(z.string()) }),
   'log.warning': z.object({ scope: z.string(), message: z.string() }),
+  'update.progress': z.object({ percent: z.number(), version: z.string().optional() }),
 } as const;
 
 export type EventContract = typeof eventContract;

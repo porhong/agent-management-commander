@@ -1,8 +1,14 @@
 import { Navigate, RouterProvider, createHashRouter, type RouteObject } from 'react-router';
 import { AppShell } from '@/components/app-shell';
+import { Dashboard } from '@/routes/dashboard';
+import { Deploy } from '@/routes/deploy';
+import { DeployHistory } from '@/routes/deploy-history';
+import { Import } from '@/routes/import';
 import { LibraryList } from '@/routes/library-list';
+import { Matrix } from '@/routes/matrix';
+import { Settings } from '@/routes/settings';
+import { Targets } from '@/routes/targets';
 import { ItemEditor } from '@/routes/item';
-import { ComingSoon, Dashboard } from '@/routes/placeholder';
 
 /**
  * A data router, not `<Routes>`: the item editor uses `useBlocker` to hold a navigation while it
@@ -16,66 +22,12 @@ export const routes: RouteObject[] = [
       { index: true, element: <Dashboard /> },
       { path: 'library/:kind', element: <LibraryList /> },
       { path: 'item/:id', element: <ItemEditor /> },
-      {
-        path: 'targets',
-        element: (
-          <ComingSoon
-            title="Targets"
-            milestone="M1.7"
-            blurb="Every tool and scope AMC can deploy to, plus the projects you register."
-          />
-        ),
-      },
-      {
-        path: 'matrix',
-        element: (
-          <ComingSoon
-            title="Deployment matrix"
-            milestone="M1.7"
-            blurb="Which item is installed in which tool, and whether it is current."
-          />
-        ),
-      },
-      {
-        path: 'history',
-        element: (
-          <ComingSoon
-            title="Deploy history"
-            milestone="M1.7"
-            blurb="Every deploy, what it changed, and a way back."
-          />
-        ),
-      },
-      {
-        path: 'deploy',
-        element: (
-          <ComingSoon
-            title="Deploy"
-            milestone="M1.7"
-            blurb="Review the plan before anything is written."
-          />
-        ),
-      },
-      {
-        path: 'import',
-        element: (
-          <ComingSoon
-            title="Import"
-            milestone="M1.8"
-            blurb="Bring in what you already have. Import never changes your tool folders."
-          />
-        ),
-      },
-      {
-        path: 'settings',
-        element: (
-          <ComingSoon
-            title="Settings"
-            milestone="M1.9"
-            blurb="Library location, theme, and how deploys are confirmed."
-          />
-        ),
-      },
+      { path: 'targets', element: <Targets /> },
+      { path: 'matrix', element: <Matrix /> },
+      { path: 'history', element: <DeployHistory /> },
+      { path: 'deploy', element: <Deploy /> },
+      { path: 'import', element: <Import /> },
+      { path: 'settings', element: <Settings /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

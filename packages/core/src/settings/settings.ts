@@ -10,8 +10,25 @@ export const settingsSchema = z.object({
   theme: z.enum(['system', 'light', 'dark']).default('system'),
   /** Ask before applying a plan, or apply automatically when it has no conflicts. */
   autoApply: z.enum(['ask', 'when-no-conflicts']).default('ask'),
+  /**
+   * Where the library lives. Unset means `<amc home>/library`. Pointing it elsewhere never
+   * moves or deletes anything: the old library simply stays where it is.
+   */
+  libraryRoot: z.string().optional(),
   /** Registered project targets (absolute paths), shown alongside the global scopes. */
   projectRoots: z.array(z.string()).default([]),
+  /** Per-target override of `autoApply`, keyed by target id. Absent means inherit. */
+  targetSettings: z
+    .record(
+      z.string(),
+      z.object({ autoApply: z.enum(['ask', 'when-no-conflicts', 'inherit']).default('inherit') }),
+    )
+    .default({}),
+  /**
+   * Whether to ask GitHub whether a newer release exists. This is the only network request AMC
+   * ever makes; nothing is downloaded or installed without the user saying so.
+   */
+  updates: z.enum(['check', 'off']).default('check'),
   /** Tool ids the user switched off even though they were detected. */
   disabledTools: z.array(z.string()).default([]),
   snapshots: z

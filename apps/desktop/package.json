@@ -1,7 +1,7 @@
 {
   "name": "@amc/desktop",
   "productName": "Agent Management Commander",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "Manage AI agents, skills, commands and workflows across AI tools.",
   "author": "Porhong",
@@ -11,7 +11,9 @@
     "build": "electron-vite build",
     "build:win": "electron-vite build && electron-builder --win",
     "preview": "electron-vite preview",
-    "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json"
+    "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
+    "e2e": "playwright test",
+    "icon": "node build/make-icon.mjs"
   },
   "devDependencies": {
     "@amc/adapter-claude-code": "workspace:*",
@@ -25,6 +27,7 @@
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.13",
     "@lezer/highlight": "^1.2.4",
+    "@playwright/test": "^1.63.0",
     "@radix-ui/react-slot": "^1.2.3",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-virtual": "^3.14.13",
@@ -36,6 +39,7 @@
     "cmdk": "^1.1.1",
     "electron": "^44.4.5",
     "electron-builder": "^26.15.3",
+    "electron-updater": "^6.8.9",
     "electron-vite": "^5.0.0",
     "lucide-react": "^1.48.0",
     "react": "^19.3.0",

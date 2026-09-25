@@ -11,6 +11,7 @@ import {
   SqliteIndexStore,
   Validator,
   bootstrapHome,
+  bootstrapLibrary,
   defaultAmcHome,
   nodeAdapterHost,
   readLockfile,
@@ -18,6 +19,7 @@ import {
   type AdapterHost,
   type AmcPaths,
   type DeployPlan,
+  type ScanResult,
   type FsPort,
   type Lockfile,
   type Target,
@@ -45,6 +47,8 @@ export interface AppServices {
   worker: WorkerClient;
   /** Plans live in main; the renderer only ever holds a planId (T1.5.2). */
   plans: Map<string, DeployPlan>;
+  /** Import scans, held here so the renderer only ever passes a scanId. */
+  scans: Map<string, ScanResult>;
   warnings: string[];
   /** Every target the user has: global scopes plus registered projects. */
   targets(): Target[];
@@ -71,11 +75,16 @@ export const targetLabel = (t: Target, displayName: string): string =>
 
 export async function createAppServices(opts: CreateServicesOptions = {}): Promise<AppServices> {
   const fs = opts.fs ?? new NodeFs();
-  const paths = await bootstrapHome(fs, opts.home ?? defaultAmcHome());
+  const home = await bootstrapHome(fs, opts.home ?? defaultAmcHome());
   const emit: Emit = opts.emit ?? (() => undefined);
 
-  const settings = new SettingsStore(fs, paths.state);
+  const settings = new SettingsStore(fs, home.state);
   await settings.load();
+
+  // The library can live outside the AMC home; state, snapshots and logs never move.
+  const libraryRoot = settings.get().libraryRoot;
+  if (libraryRoot) await bootstrapLibrary(fs, libraryRoot);
+  const paths: AmcPaths = { ...home, ...(libraryRoot && { library: libraryRoot }) };
 
   const logger = new Logger({ fs, dir: paths.logs, level: settings.get().logLevel });
   const log = logger.child('app');
@@ -124,6 +133,7 @@ export async function createAppServices(opts: CreateServicesOptions = {}): Promi
     emit,
     worker,
     plans: new Map(),
+    scans: new Map(),
     warnings,
 
     targets(): Target[] {

@@ -6,3 +6,5 @@ coverage/
 *.log
 .DS_Store
 .remember/
+test-results/
+playwright-report/

@@ -15,12 +15,23 @@ export function runVersion(cmd: string, args: string[], timeoutMs = 3000): Promi
         cmd,
         args,
         { timeout: timeoutMs, windowsHide: true, shell: process.platform === 'win32' },
-        (err, stdout) => resolve(err ? null : stdout.trim() || null),
+        (err, stdout) => resolve(err ? null : cleanVersion(stdout)),
       );
     } catch {
       resolve(null);
     }
   });
+}
+
+/**
+ * Tools print their version differently — `2.1.282 (Claude Code)`, `codex-cli 0.156.1` — and the
+ * UI shows it beside the tool's name, where repeating the name reads like a stutter. Keep the
+ * number; keep the whole line only when there is no number to find.
+ */
+export function cleanVersion(stdout: string): string | null {
+  const text = stdout.trim();
+  if (!text) return null;
+  return /\d+\.\d+(?:\.\d+)?(?:[-+][0-9A-Za-z.-]+)?/.exec(text)?.[0] ?? text;
 }
 
 /** The real machine: NodeFs, the user's home, and process.env. */

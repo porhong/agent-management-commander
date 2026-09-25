@@ -10,6 +10,8 @@ asarUnpack:
   - '**/*.node'
 win:
   target: nsis
+  # `build/icon.ico` is generated from the app's palette by `bun run --filter @amc/desktop icon`.
+  icon: build/icon.ico
   artifactName: amc-${version}-setup.${ext}
 nsis:
   oneClick: false
@@ -21,5 +23,13 @@ mac:
   target: dmg
 linux:
   target: [AppImage, deb]
+  icon: build/icon.png
   category: Development
 npmRebuild: false
+
+# Where `electron-updater` looks for a newer release (T1.10.4). Nothing is downloaded or
+# installed without the user asking, and the check can be switched off in Settings.
+publish:
+  provider: github
+  owner: porhong
+  repo: agent-management-commander

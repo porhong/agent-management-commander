@@ -173,6 +173,76 @@ describe('library handlers', () => {
   });
 });
 
+describe('release checks (T1.10.4)', () => {
+  const withUpdater = (updater: Parameters<typeof createHandlers>[0]['updater']) =>
+    createHandlers({
+      services,
+      dialog: { pickFolder: async () => null },
+      probe: () => ({
+        versions: { electron: '44', node: '24', chrome: '142' },
+        sqlite: { ok: true, version: '3', fts5: true },
+      }),
+      version: '0.1.0',
+      ...(updater && { updater }),
+    });
+
+  it('says nothing to do when this build is the newest', async () => {
+    const h2 = withUpdater({
+      check: async () => null,
+      download: async () => undefined,
+      install: () => false,
+    });
+    expect(await h2['updates.check']()).toEqual({ state: 'current', version: '0.1.0' });
+  });
+
+  it('reports a newer release without downloading it', async () => {
+    let downloaded = false;
+    const h2 = withUpdater({
+      check: async () => ({ version: '0.2.0' }),
+      download: async () => {
+        downloaded = true;
+      },
+      install: () => false,
+    });
+    expect(await h2['updates.check']()).toEqual({ state: 'available', version: '0.2.0' });
+    expect(downloaded).toBe(false);
+  });
+
+  it('never goes online when the user switched checking off', async () => {
+    await h['settings.update']({ patch: { updates: 'off' } });
+    let asked = false;
+    const h2 = withUpdater({
+      check: async () => {
+        asked = true;
+        return { version: '0.2.0' };
+      },
+      download: async () => undefined,
+      install: () => false,
+    });
+    expect(await h2['updates.check']()).toEqual({ state: 'off' });
+    expect(asked).toBe(false);
+  });
+
+  it('turns a failed check into a message rather than an exception', async () => {
+    const h2 = withUpdater({
+      check: async () => {
+        throw new Error('getaddrinfo ENOTFOUND github.com');
+      },
+      download: async () => undefined,
+      install: () => false,
+    });
+    expect(await h2['updates.check']()).toMatchObject({ state: 'error' });
+  });
+
+  it('says so plainly when this build cannot update itself', async () => {
+    expect(await withUpdater(undefined)['updates.check']()).toEqual({ state: 'unsupported' });
+    expect(await withUpdater(undefined)['updates.download']()).toMatchObject({
+      downloaded: false,
+    });
+    expect(withUpdater(undefined)['updates.install']()).toEqual({ installing: false });
+  });
+});
+
 describe('targets, preview, and deploy handlers', () => {
   const seed = async () => {
     await h['library.create']({
@@ -248,6 +318,30 @@ describe('targets, preview, and deploy handlers', () => {
     expect((await h['library.get']({ id: 'skill.sec' })).body).toBe('# Sec v2\n');
   });
 
+  it('sees a hand edit in a tool folder as drift, and a deleted file as missing (T1.9.3)', async () => {
+    await seed();
+    const plan = await h['deploy.plan']({
+      selections: [{ target: { toolId: 'claude-code', scope: 'global' }, items: ['agent.rev'] }],
+    });
+    await h['deploy.apply']({ planId: plan.planId });
+    expect(await h['status.drift']()).toMatchObject({ entries: [], warnings: [] });
+
+    // The sort of thing that happens when someone edits ~/.claude by hand.
+    const skill = join(home, '.claude', 'skills', 'sec', 'SKILL.md');
+    writeFileSync(skill, '# Sec, edited by hand\n');
+    expect((await h['status.drift']()).entries).toEqual([
+      expect.objectContaining({
+        state: 'drifted',
+        itemId: 'skill.sec',
+        relPath: 'skills/sec/SKILL.md',
+        targetId: 'claude-code:global',
+      }),
+    ]);
+
+    rmSync(skill);
+    expect((await h['status.drift']()).entries[0]).toMatchObject({ state: 'missing' });
+  });
+
   it('plans, applies, and keeps the plan in main (the renderer only sees a planId)', async () => {
     await seed();
     const plan = await h['deploy.plan']({
@@ -291,6 +385,15 @@ describe('targets, preview, and deploy handlers', () => {
     const history = await h['deploy.history']();
     expect(history[0]).toMatchObject({ deployId: report.deployId, kind: 'deploy', fileCount: 2 });
     expect(await h['deploy.incomplete']()).toEqual([]);
+
+    // What that deploy did, read back from its snapshot for the History screen (T1.7.5).
+    const detail = await h['deploy.report']({ deployId: report.deployId });
+    expect(detail.targets).toHaveLength(1);
+    expect(detail.targets[0]!.files.map((f) => `${f.op}:${f.relPath}`).sort()).toEqual([
+      'create:agents/rev.md',
+      'create:skills/sec/SKILL.md',
+    ]);
+    expect(detail.targets[0]!.files.every((f) => f.itemId)).toBe(true);
 
     const rollback = await h['deploy.planRollback']({ deployId: report.deployId });
     expect(rollback.kind).toBe('rollback');

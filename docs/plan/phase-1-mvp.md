@@ -178,6 +178,14 @@ interface TargetPlan {
 | T1.7.4 | Deployment matrix | Items × targets grid with status cells (in sync / outdated / missing / not deployed). Clicking a cell opens a plan | Uses a single index query and stays virtualized for 500 × 10 |
 | T1.7.5 | History | Deploy timeline, report detail (files, adaptations), and Revert (→ rollback plan) | Revert shows the plan like any other deploy |
 
+> **M1.7 progress (2026-09-25):** done. Decisions and findings:
+> - **A plan is declarative**, so a target ends up holding exactly what its selection names and anything else AMC put there is retired. Every entry point therefore starts from what is already deployed and adds to it (`lib/deploy.ts`); deploying one item must never quietly remove the rest. A test pins this.
+> - **One `PlanDialog` for every write.** The deploy screen, a matrix cell, removing a project's files, and Revert all build a `PlanRequest` and hand it to the same component, so there is one place where a change is reviewed and applied.
+> - **Registered project targets now carry a token.** `targets.list` returns the token main issued for each project root, because the renderer cannot turn a path back into one — without it, a project target could be listed but never deployed to. The renderer still never sends a path.
+> - **Added `deploy.report`**, which reads a past deploy's snapshot manifest. Adaptations are not stored in the snapshot, so the detail view says plainly that they are shown while planning.
+> - **Per-target auto-apply** is a `targetSettings` override on the global `autoApply`. Auto-apply only ever fires when the plan has no conflicts and no blocking issues.
+> - `AMC_TOOL_HOME` points the adapters at a throwaway home, so a real deploy in dev or E2E lands there instead of the user's `~/.claude`. Overriding `USERPROFILE` instead crashes Electron on Windows. `AMC_SCREENSHOT_CLICK` clicks a list of labels before capturing, which is how the plan dialog, a real apply, and a real revert were verified in the running app.
+
 ## M1.8: Import
 
 | ID | Task | Deliverables | Acceptance |
@@ -188,6 +196,14 @@ interface TargetPlan {
 | T1.8.4 | Adopt | Write library items. Record the **existing** native files in the target lockfiles as-is (their current hash) | **Zero** bytes changed in target folders after adopt (safety test) |
 | T1.8.5 | Import wizard UI | Detect → Scan → Review (groups, conflicts in naming, suggestions with accept/reject) → Adopt → Summary | Can go back through steps. Cancel leaves no trace |
 
+> **M1.8 progress (2026-09-25):** done, in `packages/core/src/import/`. Decisions:
+> - **Adopt writes to the library and to nothing else (S6).** T1.8.4 also asks for the native files to be recorded in the target lockfiles, and those two pull in opposite directions. The resolution: importing writes only library items, and recording ownership is a separate, reviewable deploy offered at the end. The planner already turns a byte-identical file into an `unchanged` change that records its lock entry without rewriting it, so that plan changes no existing bytes — a test fingerprints every tool file before and after to prove it.
+> - **Dedupe is two passes**: the same kind and normalized slug first, then a merge of buckets whose canonical bodies hash the same or overlap by Jaccard ≥ 0.85 over two-line shingles. Short items are deliberately left apart: one different line out of three is a third of the item, not a copy.
+> - **Suggestions come only from prose.** A reference already declared in frontmatter is a real reference and is carried over on adopt, remapped if the user renamed the item; anything merely mentioned in the body is offered with the line it came from, unaccepted by default.
+> - Found while writing the tests: adopt dropped the references a native file already declared, so importing the Claude agent fixture silently lost its two skills. Fixed, with the mode (`always` in Claude's frontmatter) preserved.
+> - The renderer never sees a scan: `import.scan` returns a `scanId` and main holds the candidates, the same shape as deploy plans.
+> - Found by screenshot: `inputClass` is `w-full`, which beat the `w-56` on the slug box and pushed the description and controls out of the row.
+
 ## M1.9: Dashboard & onboarding
 
 | ID | Task | Deliverables | Acceptance |
@@ -195,6 +211,14 @@ interface TargetPlan {
 | T1.9.1 | Onboarding | Welcome → library location → tool detection → "Import now / later" → dashboard | Re-runnable from Settings. Never writes to tool folders |
 | T1.9.2 | Dashboard | Tool cards, health panel (broken refs, outdated deployments, missing owned files, foreign files, failed/incomplete deploys), recent activity | Each health item links to a fix action |
 | T1.9.3 | Periodic status check | On focus and every N minutes: hash owned files vs. lockfile → update statuses (a full watcher comes in Phase 2) | A manual edit in `~/.claude` shows up as "drifted" within one refresh |
+
+> **M1.9 progress (2026-09-25):** done. Every route is now real; the last `ComingSoon` placeholder is gone. Decisions:
+> - **Drift is its own read-only check** (`packages/core/src/status/drift.ts`): it hashes only what a lockfile claims, so a file AMC does not own is invisible to it — noticing those is Import's job. `useDrift` re-runs it on window focus and every five minutes, and the matrix lets what is on disk beat what the version numbers say.
+> - **The dashboard's health rows each carry one action**, and each one names something real: a blocking issue links to that item's Issues tab, an outdated deployment to a pre-filled deploy, a deleted file to the deploy that puts it back, an interrupted deploy to History.
+> - **Onboarding writes exactly one thing** — the `onboarded` flag — and only offers Import, which itself writes nothing to a tool folder. Re-runnable from Settings.
+> - **The library can live outside `~/.amc`** (`settings.libraryRoot`); state, snapshots and logs never move. Choosing a folder never copies or deletes: if it holds a library AMC uses it, if it is empty AMC starts one, and the old library stays where it is. It takes effect on restart, which Settings offers.
+> - Added `settings.changed`, because Settings could previously change the theme without the shell noticing.
+> - Copy caught by screenshot rather than tests: "1 problem stop a deploy", and a single drifted file described as "and others".
 
 ## M1.10: Hardening & release 0.1.0
 
@@ -206,6 +230,15 @@ interface TargetPlan {
 | T1.10.4 | Signing & updates | Authenticode signing (needs certificate), `electron-updater` with GitHub Releases | Update from 0.1.0-beta.1 → beta.2 works |
 | T1.10.5 | Docs | README (install, first run, concepts in 5 minutes) and a `CHANGELOG.md` | — |
 | T1.10.6 | License | **Blocked on Q6.** Add `LICENSE` and third-party notices (`license-checker`) | — |
+
+> **M1.10 progress (2026-09-25):** T1.10.1, T1.10.3, T1.10.5 and T1.10.6 are done. T1.10.4 is wired but unverified, and T1.10.2 has not started.
+> - **T1.10.1 E2E:** five journeys (J1, J2, J3, J5-lite, rollback) through Playwright's `_electron`, against a temp `AMC_HOME` and `AMC_TOOL_HOME`, ~17s for the suite. Added to CI on Windows. No browser download is needed, since `_electron` drives the app itself.
+> - **T1.10.3 Packaging:** the 0.1.0 NSIS installer builds and the packaged app smoke-boots clean. The icon is generated from the app's own palette by `build/make-icon.mjs`, so it cannot drift from the design tokens. Per-user install and `deleteAppDataOnUninstall: false` were already set; `~/.amc` is not under appData, so an uninstall cannot reach it.
+> - **T1.10.6 License:** MIT (Q6 answered by the owner). `scripts/third-party-notices.mjs` replaces `license-checker`, which cannot read Bun's isolated store: it walks the runtime closure from the workspace manifests, so build tooling is excluded by construction rather than by name. 164 packages, all permissive, no copyleft.
+> - **T1.10.4 Updates:** `electron-updater` against GitHub Releases, bundled into main (the packaged app ships `out/**` only). `autoDownload` is off and nothing installs without the user asking; the whole check is behind a `updates` setting, since it is the only network request AMC makes. Handler branches are tested through an injected `UpdaterPort`. **Signing and a real update still need a certificate and a published release.**
+> - **T1.10.2 Dogfood:** not started. It needs a week of real use, which no amount of testing substitutes for.
+> - Found by the E2E suite, not by the unit tests: reverting a deploy closed the dialog the moment it succeeded, so the report of what was reverted was never seen (the same bug in Import's "record what is installed"); and a conflict row never said *what* it was asking about, so a plan that would delete a drifted file offered "Overwrite" with no hint that overwriting meant removing it.
+> - `ELECTRON_RUN_AS_NODE` has to be **deleted** from a child environment, not set to `''`: Electron checks whether the variable exists, so an empty value still starts it as plain Node.
 
 ## Phase 1 exit criteria
 

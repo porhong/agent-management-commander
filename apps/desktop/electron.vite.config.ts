@@ -5,11 +5,14 @@ import { defineConfig } from 'electron-vite';
 
 // Workspace packages ship TypeScript source, so they must be bundled rather than externalized.
 const workspacePackages = ['@amc/core', '@amc/adapter-claude-code', '@amc/adapter-codex-cli'];
+// The packaged app ships `out/**` and nothing else, so anything main needs at runtime has to be
+// bundled in rather than externalized.
+const bundledIntoMain = [...workspacePackages, 'electron-updater'];
 
 export default defineConfig({
   main: {
     build: {
-      externalizeDeps: { exclude: workspacePackages },
+      externalizeDeps: { exclude: bundledIntoMain },
       rollupOptions: {
         // The utility process (T1.5.5) is a second entry, loaded as out/main/worker.js.
         input: {

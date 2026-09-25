@@ -1,17 +1,21 @@
 import {
   AmcError,
+  adoptCandidates,
   CORE_RULES,
   ITEM_TEMPLATES,
   Validator,
   buildGraph,
+  checkDrift,
   looksBinary,
   parseManifest,
   resolveClosure,
+  scanTargets,
   targetId,
   type Content,
   type DeployPlan,
   type LibraryItem,
   type PlannedChange,
+  type RefRelation,
   type Target,
 } from '@amc/core';
 import type { Channel, ChannelInput, ChannelOutput, TargetRef } from '../shared/ipc-contract';
@@ -22,6 +26,25 @@ export interface DialogPort {
   pickFolder(title?: string): Promise<string | null>;
 }
 
+/** The two things only the shell can do, injected for the same reason. */
+export interface ShellPort {
+  openPath(path: string): Promise<boolean>;
+  relaunch(): void;
+}
+
+/**
+ * Release checks (T1.10.4). Injected so the handlers stay Electron-free and so a test can drive
+ * every branch without a network or a published release.
+ */
+export interface UpdaterPort {
+  /** The newer version, or null when this build is current. Throws if the check fails. */
+  check(): Promise<{ version: string } | null>;
+  /** Downloads what `check` found. Throws if there is nothing to download. */
+  download(): Promise<void>;
+  /** Quits and installs. Returns false when there is nothing downloaded to install. */
+  install(): boolean;
+}
+
 export type HandlerMap = {
   [C in Channel]: (input: ChannelInput<C>) => Promise<ChannelOutput<C>> | ChannelOutput<C>;
 };
@@ -30,6 +53,12 @@ export interface HandlerDeps {
   services: AppServices;
   dialog: DialogPort;
   probe: () => ChannelOutput<'system.probe'>;
+  /** Omitted in tests, where revealing a folder and restarting are both no-ops. */
+  shell?: ShellPort;
+  /** `app.getVersion()`; only main can ask Electron for it. */
+  version?: string;
+  /** Omitted in development and in tests, where there is no packaged build to update. */
+  updater?: UpdaterPort;
 }
 
 const toBase64 = (files: Record<string, Buffer>): Record<string, string> =>
@@ -68,7 +97,14 @@ function wireChange(c: PlannedChange) {
   };
 }
 
-export function createHandlers({ services, dialog, probe }: HandlerDeps): HandlerMap {
+export function createHandlers({
+  services,
+  dialog,
+  probe,
+  shell,
+  version = '0.0.0',
+  updater,
+}: HandlerDeps): HandlerMap {
   const { library, deploy, index, settings, logger, adapters, tokens } = services;
   const log = logger.child('ipc');
 
@@ -141,6 +177,7 @@ export function createHandlers({ services, dialog, probe }: HandlerDeps): Handle
 
     'system.status': () => ({
       ready: true,
+      version,
       home: services.paths.home,
       warnings: services.warnings,
       counts: {
@@ -150,11 +187,70 @@ export function createHandlers({ services, dialog, probe }: HandlerDeps): Handle
       },
     }),
 
+    'system.reveal': async ({ what }) => {
+      const { home, library: libraryDir, logs } = services.paths;
+      const path = { home, library: libraryDir, logs }[what];
+      return { opened: (await shell?.openPath(path)) ?? false };
+    },
+
+    'system.relaunch': () => {
+      log.info('relaunching');
+      shell?.relaunch();
+      return { relaunching: shell !== undefined };
+    },
+
+    // ---------- updates (T1.10.4) ----------
+    'updates.check': async () => {
+      if (settings.get().updates === 'off') return { state: 'off' as const };
+      if (!updater) return { state: 'unsupported' as const };
+      try {
+        const found = await updater.check();
+        log.info('update check', { found: found?.version ?? null });
+        return found
+          ? { state: 'available' as const, version: found.version }
+          : { state: 'current' as const, version };
+      } catch (err) {
+        return { state: 'error' as const, message: (err as Error).message };
+      }
+    },
+
+    'updates.download': async () => {
+      if (!updater) return { downloaded: false, message: 'Updates are not available here.' };
+      try {
+        await updater.download();
+        return { downloaded: true };
+      } catch (err) {
+        return { downloaded: false, message: (err as Error).message };
+      }
+    },
+
+    'updates.install': () => ({ installing: updater?.install() ?? false }),
+
+    // ---------- status (T1.9.3) ----------
+    'status.drift': async () => {
+      const report = await checkDrift({ fs: services.fs, adapters }, services.targets());
+      return {
+        checkedAt: report.checkedAt,
+        warnings: report.warnings,
+        entries: report.entries
+          .filter((e) => e.state !== 'in-sync')
+          .map((e) => ({
+            targetId: e.targetId,
+            root: e.root,
+            relPath: e.relPath,
+            ...(e.region && { region: e.region }),
+            itemId: e.itemId,
+            state: e.state,
+          })),
+      };
+    },
+
     // ---------- settings ----------
     'settings.get': () => settings.get() as unknown as Record<string, unknown>,
     'settings.update': async ({ patch }) => {
       const next = await settings.update(patch as never);
       logger.level = next.logLevel;
+      services.emit('settings.changed', { keys: Object.keys(patch) });
       return next as unknown as Record<string, unknown>;
     },
 
@@ -278,7 +374,7 @@ export function createHandlers({ services, dialog, probe }: HandlerDeps): Handle
         toolId: t.toolId,
         scope: t.scope,
         label: targetLabel(t, displayName(t.toolId)),
-        ...(t.scope === 'project' && { root: t.root }),
+        ...(t.scope === 'project' && { root: t.root, token: tokens.issue(t.root) }),
         roots: adapters.get(t.toolId).paths(t),
       })),
 
@@ -344,6 +440,108 @@ export function createHandlers({ services, dialog, probe }: HandlerDeps): Handle
       };
     },
 
+    // ---------- import (M1.8) ----------
+    'import.scan': async ({ targetIds }) => {
+      const started = Date.now();
+      const all = services.targets();
+      const chosen = targetIds?.length ? all.filter((t) => targetIds.includes(targetId(t))) : all;
+      const existing = new Set(index.listItems().map((row) => row.id));
+      const scan = await scanTargets(
+        {
+          adapters,
+          onProgress: (p) =>
+            services.emit('scan.progress', {
+              toolId: p.toolId,
+              done: p.done,
+              total: p.total,
+              ...(p.label && { label: p.label }),
+            }),
+        },
+        chosen,
+        existing,
+      );
+
+      const scanId = `scan_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      services.scans.set(scanId, scan);
+      if (services.scans.size > 5) {
+        services.scans.delete(services.scans.keys().next().value!);
+      }
+
+      const byId = new Map(scan.candidates.map((c) => [c.id, c]));
+      const labelOf = (tid: string) =>
+        all
+          .filter((t) => targetId(t) === tid)
+          .map((t) => targetLabel(t, displayName(t.toolId)))[0] ?? tid;
+
+      log.info('import scan', { targets: chosen.length, groups: scan.groups.length });
+
+      return {
+        scanId,
+        fileCount: scan.fileCount,
+        durationMs: Date.now() - started,
+        warnings: scan.warnings,
+        groups: scan.groups.map((group) => {
+          const canonical = byId.get(group.canonicalId)!;
+          return {
+            key: group.key,
+            kind: group.kind,
+            slug: group.slug,
+            name: canonical.item.manifest.name,
+            description: canonical.item.manifest.description,
+            body: canonical.item.body,
+            ...(group.existingId && { existingId: group.existingId }),
+            canonicalId: group.canonicalId,
+            sources: group.sources.flatMap((source) => {
+              const candidate = byId.get(source.candidateId);
+              if (!candidate) return [];
+              return [
+                {
+                  candidateId: candidate.id,
+                  targetId: candidate.targetId,
+                  toolId: candidate.toolId,
+                  label: labelOf(candidate.targetId),
+                  relPath: candidate.entry,
+                  linked: candidate.linked,
+                  reason: source.reason,
+                  similarity: source.similarity,
+                  warnings: candidate.warnings,
+                },
+              ];
+            }),
+            suggestions: group.suggestions,
+          };
+        }),
+      };
+    },
+
+    'import.adopt': async ({ scanId, items }) => {
+      const scan = services.scans.get(scanId);
+      if (!scan) {
+        throw new AmcError('SCAN_STALE', 'That scan is no longer available. Scan again.');
+      }
+      const result = await adoptCandidates(
+        library,
+        scan,
+        items.map((item) => ({
+          key: item.key,
+          slug: item.slug,
+          ...(item.candidateId && { candidateId: item.candidateId }),
+          ...(item.links && {
+            links: item.links.map((l) => ({ to: l.to, relation: l.relation as RefRelation })),
+          }),
+        })),
+      );
+      if (result.created.length > 0) {
+        await services.refreshIndex();
+        services.emit('library.changed', { ids: result.created, reason: 'create' });
+      }
+      log.info('import adopted', {
+        created: result.created.length,
+        skipped: result.skipped.length,
+      });
+      return result;
+    },
+
     // ---------- deploy ----------
     'deploy.plan': async ({ selections }) => {
       const { items, problems } = await library.load();
@@ -402,6 +600,31 @@ export function createHandlers({ services, dialog, probe }: HandlerDeps): Handle
         ...(m.revertsDeployId && { revertsDeployId: m.revertsDeployId }),
         fileCount: m.entries.filter((e) => e.relPath !== '.amc-lock.json').length,
       })),
+
+    // Read-only: the snapshot manifest records what each op did, per target.
+    'deploy.report': async ({ deployId }) => {
+      const manifest = await deploy.readManifest(deployId);
+      const byTarget = new Map<string, ChannelOutput<'deploy.report'>['targets'][number]>();
+      for (const entry of manifest.entries) {
+        // Lockfiles carry no item and are bookkeeping, not something the user deployed.
+        if (entry.relPath === '.amc-lock.json') continue;
+        const group = byTarget.get(entry.targetId) ?? { targetId: entry.targetId, files: [] };
+        group.files.push({
+          root: entry.root,
+          relPath: entry.relPath,
+          ...(entry.itemId && { itemId: entry.itemId }),
+          op: !entry.afterFile ? 'delete' : entry.existed ? 'update' : 'create',
+        });
+        byTarget.set(entry.targetId, group);
+      }
+      return {
+        deployId: manifest.deployId,
+        kind: manifest.kind,
+        createdAt: manifest.createdAt,
+        ...(manifest.revertsDeployId && { revertsDeployId: manifest.revertsDeployId }),
+        targets: [...byTarget.values()],
+      };
+    },
 
     'deploy.planRollback': async ({ deployId }) =>
       wirePlan(remember(await deploy.planRollback(deployId))),

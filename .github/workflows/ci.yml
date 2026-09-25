@@ -27,6 +27,28 @@ jobs:
       - run: bun run typecheck
       - run: bun run test
 
+  e2e:
+    # The user journeys, driven through the real Electron app against temp folders (T1.10.1).
+    needs: check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: bun install --frozen-lockfile
+      - run: bun run --filter @amc/desktop build
+      - run: bun run e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-failures
+          path: apps/desktop/test-results/
+          retention-days: 7
+
   package-smoke:
     # Proves the packaged app starts and SQLite (node:sqlite + FTS5) works (P0-03).
     needs: check
