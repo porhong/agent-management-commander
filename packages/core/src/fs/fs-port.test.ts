@@ -90,6 +90,16 @@ describe.each(impls)('FsPort contract: %s', (_name, make) => {
     expect(await fs.stat(join(root, 'd'))).toBeNull();
     await expect(fs.rm(join(root, 'missing'))).resolves.toBeUndefined();
   });
+
+  it('removes an empty directory without recursive, but refuses a non-empty one', async () => {
+    await fs.mkdirp(join(root, 'empty'));
+    await fs.rm(join(root, 'empty'));
+    expect(await fs.stat(join(root, 'empty'))).toBeNull();
+
+    await fs.writeFileAtomic(join(root, 'full', 'f.md'), 'z');
+    await expect(fs.rm(join(root, 'full'))).rejects.toThrow();
+    expect(await fs.stat(join(root, 'full', 'f.md'))).not.toBeNull();
+  });
 });
 
 describe('realpath (S4)', () => {

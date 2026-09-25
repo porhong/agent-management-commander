@@ -51,7 +51,16 @@ export class NodeFs implements FsPort {
   }
 
   async rm(path: string, opts?: { recursive?: boolean }): Promise<void> {
-    await withRetry(() => fs.rm(path, { force: true, recursive: opts?.recursive ?? false }));
+    const recursive = opts?.recursive ?? false;
+    await withRetry(async () => {
+      try {
+        await fs.rm(path, { force: true, recursive });
+      } catch (err) {
+        // Non-recursive `rm` refuses directories; the port's contract removes an empty one.
+        if ((err as NodeJS.ErrnoException).code !== 'ERR_FS_EISDIR') throw err;
+        await fs.rmdir(path);
+      }
+    });
   }
 
   async readdir(path: string, opts?: { recursive?: boolean }): Promise<DirEntry[]> {

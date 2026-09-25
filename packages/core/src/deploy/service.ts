@@ -8,8 +8,23 @@ import { sha256 } from '../fs/text';
 import type { AmcPaths } from '../library/bootstrap';
 import { CORE_RULES } from '../validator/rules';
 import { Validator } from '../validator/validator';
-import { LOCKFILE, getEntry, readLockfile, serializeLockfile, setEntry } from './lockfile';
-import { changeId, conflictsOf, isInside, ordinal, planDeploy, type PlanInput } from './planner';
+import {
+  LOCKFILE,
+  getEntry,
+  parseLockfile,
+  readLockfile,
+  serializeLockfile,
+  setEntry,
+} from './lockfile';
+import {
+  changeId,
+  conflictsOf,
+  isInside,
+  ordinal,
+  planDeploy,
+  type LockMirror,
+  type PlanInput,
+} from './planner';
 import type {
   ConflictResolution,
   DeployPlan,
@@ -33,6 +48,8 @@ export interface DeployServiceOptions {
   validator?: Validator;
   now?: () => Date;
   newId?: () => string;
+  /** The index's copy of every lockfile (kept in sync after each write). */
+  lockMirror?: LockMirror;
 }
 
 export type RecoveryMode = 'rollback' | 'complete';
@@ -66,6 +83,7 @@ export class DeployService {
   private readonly validator: Validator;
   private readonly now: () => Date;
   private readonly newId: () => string;
+  private readonly lockMirror: LockMirror | undefined;
 
   constructor(opts: DeployServiceOptions) {
     this.fs = opts.fs;
@@ -74,6 +92,7 @@ export class DeployService {
     this.validator = opts.validator ?? new Validator([...CORE_RULES, ...opts.adapters.rules()]);
     this.now = opts.now ?? (() => new Date());
     this.newId = opts.newId ?? (() => randomBytes(8).toString('hex'));
+    this.lockMirror = opts.lockMirror;
   }
 
   private get journalDir() {
@@ -88,6 +107,7 @@ export class DeployService {
         validator: this.validator,
         now: this.now,
         newId: this.newId,
+        ...(this.lockMirror && { lockMirror: this.lockMirror }),
       },
       input,
     );
@@ -171,6 +191,7 @@ export class DeployService {
     for (const op of [...ops.filter((o) => !o.lockfile), ...ops.filter((o) => o.lockfile)]) {
       if (op.data) {
         await this.fs.writeFileAtomic(op.path, op.data);
+        if (op.lockfile) this.lockMirror?.set(op.rootDir, parseLockfile(op.data.toString('utf8')));
         if (!op.lockfile) report.written.push(op.path);
       } else {
         await this.fs.rm(op.path);
@@ -595,12 +616,33 @@ export class DeployService {
             : null;
       if (source) await this.fs.writeFileAtomic(e.path, await this.fs.readFile(source));
       else await this.fs.rm(e.path);
+      if (e.relPath === LOCKFILE) await this.syncMirror(dirname(e.path));
     }
     await this.writeJournal({
       ...journal,
       status: manifest && mode === 'complete' ? 'complete' : 'rolled-back',
       completedAt: this.now().toISOString(),
     });
+  }
+
+  // ---------- lockfile mirror (T1.4.1) ----------
+
+  private async syncMirror(rootDir: string): Promise<void> {
+    if (!this.lockMirror) return;
+    const read = await readLockfile(this.fs, rootDir);
+    this.lockMirror.set(rootDir, read.hash === null ? null : read.lock);
+  }
+
+  /** Writes the index's copy back after the lockfile was deleted. Never touches other files. */
+  async restoreLockfile(rootDir: string): Promise<void> {
+    const lock = this.lockMirror?.get(rootDir);
+    if (!lock) throw new AmcError('DEPLOY_NOT_FOUND', `The index has no lockfile for ${rootDir}`);
+    await this.fs.writeFileAtomic(join(rootDir, LOCKFILE), serializeLockfile(lock));
+  }
+
+  /** Accepts the loss: AMC no longer owns anything in that root (its files become foreign). */
+  forgetLockfile(rootDir: string): void {
+    this.lockMirror?.set(rootDir, null);
   }
 
   // ---------- pruning ----------

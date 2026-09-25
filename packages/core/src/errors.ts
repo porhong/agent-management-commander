@@ -21,7 +21,9 @@ export type AmcErrorCode =
   | 'PLAN_STALE'
   | 'CONFLICTS_UNRESOLVED'
   | 'DEPLOY_NOT_FOUND'
-  | 'ROLLBACK_REFUSED';
+  | 'ROLLBACK_REFUSED'
+  | 'SETTINGS_NOT_LOADED'
+  | 'SETTINGS_INVALID';
 
 export class AmcError extends Error {
   constructor(

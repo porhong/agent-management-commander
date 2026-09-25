@@ -20,6 +20,8 @@
       "name": "@amc/desktop",
       "version": "0.0.1",
       "devDependencies": {
+        "@amc/adapter-claude-code": "workspace:*",
+        "@amc/adapter-codex-cli": "workspace:*",
         "@amc/core": "workspace:*",
         "@radix-ui/react-slot": "^1.2.3",
         "@tailwindcss/vite": "^4.3.3",

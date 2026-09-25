@@ -130,6 +130,15 @@ interface TargetPlan {
 | T1.5.6 | Settings & logging | `settings.json` (Zod-validated), rotating log files in `~/.amc/logs`, and a "Copy diagnostics" action | Logs never contain file *contents*, only paths and hashes |
 | T1.5.7 | Mock API | `renderer/src/mocks/amc-mock.ts` implementing the contract with fixture data, enabled by `VITE_AMC_MOCK=1` | UI track can develop without a real core |
 
+> **M1.5 outcome (2026-09-25):** index in `packages/core/src/index-store/`; settings and logging in `packages/core/src/{settings,log}/`; the app layer in `apps/desktop/src/{shared,main,preload}/`. Decisions beyond the table:
+> - **No path ever crosses IPC.** A folder is chosen with `dialog.pickFolder`, which returns an opaque `tok_<32 hex>`; `PathTokenRegistry` in main is the only thing that can turn it back into a path. Project targets are addressed by token, and every id/slug is regex-validated at the boundary.
+> - **Plans stay in main.** `deploy.plan` returns a `planId`; `deploy.apply` takes only that id, so the renderer can't hand-craft a plan. Applying consumes the id, and only the last 20 plans are kept.
+> - **The preload is schema-free.** It builds `window.amc` from `shared/channels.ts` (plain strings), so Zod never reaches the sandboxed preload (bundle: 1.4 kB). A test asserts that list equals the contract's channels.
+> - **The index is derived, never authoritative.** Deployments and the matrix are recomputed from the lockfile mirror, so `rebuild()` always reproduces them. An outdated schema is dropped and rebuilt rather than migrated. `DeployService` now takes a `lockMirror`, which closes the T1.4.1 gap: a deleted lockfile puts the target on hold, with `restoreLockfile` / `forgetLockfile` as the two ways out.
+> - **Worker offload** runs library loading in a `utilityProcess` and falls back in-process when it can't start, dies, or times out. Verified in real Electron: `AMC_SMOKE=1` with `AMC_HOME` set reports `{"ok":true,"items":2,"fallbacks":[]}`, and CI now asserts that.
+> - **Logs hold paths and hashes only:** field names like `content`, `body`, `before` and `after` are replaced with `[redacted]`, and long values are truncated. Settings degrade to defaults rather than blocking startup.
+> - Found and fixed along the way: `NodeFs.rm` threw `EISDIR` on an empty directory while `MemFs` removed it. Both now match, with a contract test.
+
 ## M1.6: Library UI & item editor
 
 | ID | Task | Deliverables | Acceptance |

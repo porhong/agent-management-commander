@@ -48,7 +48,10 @@ jobs:
         shell: pwsh
         run: |
           $env:AMC_SMOKE = '1'
+          # With AMC_HOME set, the smoke run also boots the services and the utility process.
+          $env:AMC_HOME = Join-Path $env:RUNNER_TEMP 'amc-smoke-home'
           $exe = Get-ChildItem apps/desktop/release -Recurse -Filter 'Agent Management Commander.exe' | Select-Object -First 1
           $out = & $exe.FullName 2>&1 | Out-String
           Write-Output $out
           if ($LASTEXITCODE -ne 0) { exit 1 }
+          if ($out -notmatch '"ok":true') { Write-Error 'services did not start cleanly'; exit 1 }

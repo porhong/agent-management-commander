@@ -24,7 +24,10 @@ Bun workspaces monorepo (Bun is the package manager and script runner). The tool
   - Update golden snapshots **only after reviewing the diff**: `bunx vitest run -u`
 - `bun run --filter @amc/core schema`: regenerate `packages/core/schema/*.json` after changing Zod manifests. A test fails if they are stale.
 - `AMC_REAL_HOME=1 bunx vitest run packages/adapters/claude-code`: opt-in, **read-only** round-trip against the real `~/.claude`. All other tests use fixtures, `MemFs`, or temp dirs.
-- `AMC_SMOKE=1 "<app>.exe"`: the headless smoke mode. The packaged app prints a JSON probe (versions, SQLite/FTS5) and exits. CI uses this.
+- `AMC_SMOKE=1 "<app>.exe"`: the headless smoke mode. The packaged app prints a JSON probe (versions, SQLite/FTS5) and exits. Also setting `AMC_HOME=<dir>` boots the real services against that home and reports `{ok, items, targets, fallbacks}`, which exercises the utility process. CI runs both.
+- `VITE_AMC_MOCK=1 bun run dev`: runs the renderer against fixture data (`renderer/src/mocks/amc-mock.ts`) with no real core behind it.
+
+> Running Electron from a shell that exports `ELECTRON_RUN_AS_NODE=1` silently starts plain Node, and `require('electron').app` is then undefined. Clear it first.
 
 ## Toolchain constraints (don't "upgrade" past these without checking)
 
@@ -67,9 +70,12 @@ Bun workspaces monorepo (Bun is the package manager and script runner). The tool
   - All core file I/O goes through `FsPort`, so it can be tested with `MemFs`.
   - The app and the future `packages/cli` consume core only through `packages/core/src/index.ts`.
 - **Electron security:**
-  - The renderer is sandboxed, with no Node access.
-  - Every IPC channel is declared in `apps/desktop/src/shared/ipc-contract.ts` and Zod-validated in main.
-  - There is no generic filesystem channel, and the renderer never passes arbitrary paths.
+  - The renderer is sandboxed, with no Node access. `apps/desktop/src/main/window.ts` holds the hardening as data, asserted by `window.test.ts`.
+  - Every IPC channel is declared in `apps/desktop/src/shared/ipc-contract.ts` and Zod-validated in main. Adding a channel means adding it to `shared/channels.ts` too (a test keeps the two in step), because the sandboxed preload builds `window.amc` from that plain list and must stay Zod-free.
+  - There is no generic filesystem channel, and **the renderer never passes a path**: folders come from `dialog.pickFolder` as an opaque token that only `main/path-tokens.ts` can resolve.
+  - Deploy plans live in main (`AppServices.plans`); the renderer only ever holds a `planId`.
+- **App wiring:** `main/app-services.ts` builds core services from `~/.amc`, `main/handlers.ts` maps contract channels to them (no Electron imports, so it is unit-tested), and `main/ipc-router.ts` is the only Electron binding. Heavy library scans run in a `utilityProcess` (`main/worker/`) that falls back in-process.
+- **The index (`packages/core/src/index-store/`) is a cache.** Deployments and the deploy matrix are derived from the mirrored lockfiles, so a rebuild reproduces them; an outdated schema is dropped, never migrated.
 
 ## Non-negotiable safety invariants
 

@@ -32,7 +32,20 @@ export interface PlannerDeps {
   validator: Validator;
   now: () => Date;
   newId: () => string;
+  lockMirror?: LockMirror;
 }
+
+/** The index's copy of each lockfile, used to notice (and recover) a deleted lockfile. */
+export interface LockMirror {
+  get(rootDir: string): Lockfile | undefined;
+  set(rootDir: string, lock: Lockfile | null): void;
+}
+
+const ownedCount = (lock: Lockfile | undefined): number =>
+  lock
+    ? Object.keys(lock.files).length +
+      Object.values(lock.regions).reduce((n, r) => n + Object.keys(r).length, 0)
+    : 0;
 
 export interface PlanInput {
   items: readonly LibraryItem[];
@@ -103,6 +116,15 @@ export async function planDeploy(deps: PlannerDeps, input: PlanInput): Promise<D
         const read = await readLockfile(fs, dir);
         locks[key] = read.lock;
         readHashes[read.path] = read.hash;
+        // A missing lockfile the index remembers means AMC would forget what it owns (T1.4.1).
+        const remembered = ownedCount(deps.lockMirror?.get(dir));
+        if (read.hash === null && remembered > 0) {
+          throw new AmcError(
+            'LOCK_CORRUPT',
+            `${read.path} is missing, but AMC's index remembers ${remembered} owned file(s) there. Restore the lockfile or forget them.`,
+            { rootDir: dir, reason: 'missing' },
+          );
+        }
       }
     } catch (err) {
       if (!isAmcError(err, 'LOCK_CORRUPT')) throw err;
