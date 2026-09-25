@@ -44,8 +44,10 @@ Bun workspaces monorepo (Bun is the package manager and script runner). The tool
   - command → agent and preloaded skills
   - workflow → steps
   - skill → `dependsOn` other skills
-- **Adapters** (`packages/adapters/<tool>`) implement `ToolAdapter` (a draft in `packages/core/src/adapter/types.ts`, growing to `detect`, `capabilities`, `paths`, `scan`, `compile`, `parse` in M1.3).
-  - `compile` must stay **pure**: it takes an item and returns `CompiledFile[]`, and adapters never touch the library.
+- **Adapters** (`packages/adapters/<tool>`) implement `ToolAdapter` (`packages/core/src/adapter/types.ts`): `detect`, `capabilities`, `rules`, `paths`, `scan`, `parse`, `compile`. They are built from an injected `AdapterHost` (fs, home, env, runVersion).
+  - `compile` must stay **pure**: it takes a `ResolvedItem` (references embedded) plus a `Target` and returns `CompiledFile[]`. Adapters never touch the library.
+  - A target has **named roots** (Codex: `codex` = `~/.codex`, `agents` = `~/.agents`). Every compiled or scanned file names its root.
+  - Canonical positional placeholders are 1-based (`{{arg1}}` is the first argument). Claude Code's `$N` is 0-based.
   - If a tool lacks a feature, the adapter applies a degradation and reports it as an `adaptation`. Permissions are never widened silently.
 - **Lossless round-trips through `compat.overrides.<tool>`:**
   - Canonical fields hold abstract values: permissions like `read`, `search`, `shell`, and model tiers `fast`, `balanced`, `powerful`.

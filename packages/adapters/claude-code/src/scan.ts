@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import type { FsPort, NativeFile, NativeGroup } from '@amc/core';
+import { ROOT } from './compile';
 
 /** Skill folders managed by Claude itself (claude.ai sync). Never adopted or written. */
 export const TOOL_MANAGED_SKILL_DIRS = new Set(['synced']);
@@ -31,6 +32,7 @@ export async function scanRoot(fs: FsPort, root: string): Promise<NativeGroup[]>
       const relPath = `${dir}/${e.path}`;
       groups.push({
         kind,
+        root: ROOT,
         entry: relPath,
         files: await readFiles(fs, root, [relPath]),
         linked: false,
@@ -50,6 +52,7 @@ export async function scanRoot(fs: FsPort, root: string): Promise<NativeGroup[]>
         .map((f) => `skills/${d.path}/${f.path}`);
       groups.push({
         kind: 'skill',
+        root: ROOT,
         entry: `skills/${d.path}/SKILL.md`,
         files: await readFiles(fs, root, rels),
         linked: d.kind === 'symlink',

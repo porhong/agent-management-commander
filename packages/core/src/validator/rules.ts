@@ -1,6 +1,7 @@
 import type { ItemId } from '../model/common';
 import { BODY_FILE, type Manifest, type ModeledKind } from '../model/manifests';
 import { MANIFEST_FILE, kindDir, serializeManifest, type LibraryItem } from '../library/item-io';
+import { placeholderNames } from '../adapter/placeholders';
 import { findCycles } from '../resolver/graph';
 import { looksBinary, scanForSecrets } from './secrets';
 import type { IssueFix, Rule, RuleFinding, Severity, ValidationContext } from './types';
@@ -208,10 +209,44 @@ export const secretScanRule: Rule = {
     }),
 };
 
+/** Command templates may use {{args}}, {{argN}}, and declared argument names only. */
+export const templatePlaceholdersRule: Rule = {
+  id: 'template-placeholders',
+  severity: 'warning',
+  description: 'Command placeholders are declared arguments',
+  check: (ctx) =>
+    ctx.items.flatMap((i): RuleFinding[] => {
+      const m = i.manifest;
+      if (m.kind !== 'command') return [];
+      const declared = new Set(m.arguments.map((a) => a.name));
+      const undeclared = placeholderNames(i.body).filter(
+        (n) => n !== 'args' && !/^arg[1-9]\d*$/.test(n) && !declared.has(n),
+      );
+      if (undeclared.length === 0) return [];
+      return [
+        {
+          itemId: m.id,
+          path: 'arguments',
+          message: `Template uses undeclared arguments: ${undeclared.join(', ')}`,
+          fix: {
+            label: 'Declare them',
+            itemId: m.id,
+            fields: { arguments: [...m.arguments, ...undeclared.map((name) => ({ name }))] },
+          },
+        },
+      ];
+    }),
+};
+
 /** Per-target: description length limit of one tool (registered by that tool's adapter). */
-export function descriptionLimitRule(toolId: string, limit: number, severity: Severity): Rule {
+export function descriptionLimitRule(
+  toolId: string,
+  limit: number,
+  severity: Severity,
+  kinds?: readonly ModeledKind[],
+): Rule {
   return {
-    id: `description-limit:${toolId}`,
+    id: `description-limit:${toolId}${kinds ? ':' + kinds.join('+') : ''}`,
     severity,
     description: `Description fits ${toolId}'s ${limit}-character limit`,
     check: (ctx) =>
@@ -219,7 +254,11 @@ export function descriptionLimitRule(toolId: string, limit: number, severity: Se
         .filter((t) => t.toolId === toolId)
         .flatMap((t) =>
           ctx.items
-            .filter((i) => i.manifest.description.length > limit)
+            .filter(
+              (i) =>
+                i.manifest.description.length > limit &&
+                (!kinds || kinds.includes(i.manifest.kind as ModeledKind)),
+            )
             .map((i) => ({
               itemId: i.manifest.id,
               targetId: t.id,
@@ -265,4 +304,5 @@ export const CORE_RULES: readonly Rule[] = [
   untrustedScriptsRule,
   unusedItemRule,
   secretScanRule,
+  templatePlaceholdersRule,
 ];

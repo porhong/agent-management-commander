@@ -14,6 +14,7 @@ import {
   slugNamingRule,
   slugPathSafeRule,
   slugUniqueRule,
+  templatePlaceholdersRule,
   unusedItemRule,
   untrustedScriptsRule,
 } from './rules';
@@ -173,6 +174,23 @@ describe('rules: passing and failing fixtures (T1.2.5)', () => {
       expect(i.message).not.toContain(FAKE_AWS);
       expect(i.message).not.toContain(FAKE_ANT);
     }
+  });
+
+  it('template-placeholders flags undeclared names, with a fix that declares them', () => {
+    const good = ok(
+      'command.c',
+      { arguments: [{ name: 'pr' }] },
+      '{{pr}} {{args}} {{arg2}} \\{{x}}',
+    );
+    expect(run(templatePlaceholdersRule, only([good]))).toEqual([]);
+    const bad = ok('command.c', { arguments: [{ name: 'pr' }] }, '{{pr}} {{ticket}} {{arg0}}');
+    expect(run(templatePlaceholdersRule, only([bad]))).toMatchObject([
+      {
+        severity: 'warning',
+        message: 'Template uses undeclared arguments: ticket, arg0',
+        fix: { fields: { arguments: [{ name: 'pr' }, { name: 'ticket' }, { name: 'arg0' }] } },
+      },
+    ]);
   });
 
   it('descriptionLimitRule applies once per matching target', () => {

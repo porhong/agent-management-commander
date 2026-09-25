@@ -85,6 +85,28 @@ function finish(
   return parseManifest(manifest);
 }
 
+const ARG_NAME = /^[a-z][a-z0-9_]*$/;
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Native command body → canonical template. `$ARGUMENTS` → `{{args}}`; `$N` (0-based in Claude
+ * Code) → `{{arg<N+1>}}` (canonical positions are 1-based); declared `$name` → `{{name}}`.
+ */
+export function toCanonicalTemplate(body: string, named: readonly string[]) {
+  const positions = new Set<number>();
+  let out = escapeCanonical(body)
+    .replace(/\$ARGUMENTS\b/g, '{{args}}')
+    .replace(/\$(\d+)(?!\d)/g, (_m, n: string) => {
+      positions.add(Number(n) + 1);
+      return `{{arg${Number(n) + 1}}}`;
+    });
+  // Longest first so `$pr_id` isn't consumed by `$pr`.
+  for (const name of [...named].sort((a, b) => b.length - a.length)) {
+    out = out.replace(new RegExp(`\\$${escapeRe(name)}(?![A-Za-z0-9_])`, 'g'), `{{${name}}}`);
+  }
+  return { body: out, positions: [...positions].sort((a, b) => a - b) };
+}
+
 export function parseGroup(group: NativeGroup): ParseResult {
   const entry = group.files.find((f) => f.relPath === group.entry);
   if (!entry) throw new Error(`entry ${group.entry} missing from group`);
@@ -154,25 +176,26 @@ export function parseGroup(group: NativeGroup): ParseResult {
   const fileName = segments.slice(1).join('/');
   const slug = toSlug(segments.at(-1)!.replace(/\.md$/, ''));
   if (fileName !== `${slug}.md`) o.path = fileName;
-  const { description: _d, 'allowed-tools': allowed, ...raw } = fm.data;
+  const { description: _d, 'allowed-tools': allowed, arguments: args, ...raw } = fm.data;
   const allowedTools = mapTools(allowed, 'allowed-tools', o);
 
-  // Placeholders: $ARGUMENTS → {{args}}, $N → {{argN}} (index semantics preserved exactly).
-  const positions = new Set<number>();
-  const body = escapeCanonical(fm.body)
-    .replace(/\$ARGUMENTS\b/g, '{{args}}')
-    .replace(/\$(\d)(?!\d)/g, (_m, n: string) => {
-      positions.add(Number(n));
-      return `{{arg${n}}}`;
-    });
+  // Named arguments map only when every name is a canonical identifier; otherwise stay raw.
+  const named = args === undefined ? [] : splitToolList(args);
+  const mapNamed = named.length > 0 && named.every((n) => ARG_NAME.test(n) && !/^arg\d+$/.test(n));
+  if (args !== undefined && !mapNamed) raw['arguments'] = args;
+  const template = toCanonicalTemplate(fm.body, mapNamed ? named : []);
+
   const manifest = {
     id: `command.${slug}`,
     kind: 'command',
     name: slug,
     slug,
     description: descriptionOf(fm.data, fm.body, o, warnings),
-    arguments: [...positions].sort().map((n) => ({ name: `arg${n}` })),
+    arguments: [
+      ...(mapNamed ? named : []).map((name) => ({ name })),
+      ...template.positions.map((n) => ({ name: `arg${n}` })),
+    ],
     ...(allowedTools ? { allowedTools } : {}),
   };
-  return { item: { manifest: finish(manifest, o, raw), body, files: {} }, warnings };
+  return { item: { manifest: finish(manifest, o, raw), body: template.body, files: {} }, warnings };
 }

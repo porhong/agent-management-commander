@@ -1,14 +1,18 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
+  buildGraph,
   itemDir,
   MemFs,
   NodeFs,
   parseFrontmatter,
+  parseManifest,
   readItem,
+  resolveClosure,
   serializeManifest,
   toLf,
   writeItem,
+  type LibraryItem,
   type NativeGroup,
 } from '@amc/core';
 import { describe, expect, it } from 'vitest';
@@ -16,7 +20,7 @@ import { splitToolList } from './mapping';
 import { compileItem, createClaudeCodeAdapter, parseGroup, scanRoot } from './index';
 
 const FIXTURE_ROOT = resolve(__dirname, '../../../../fixtures/claude-code/global');
-const TOOL_LIST_KEYS = ['tools', 'disallowedTools', 'allowed-tools', 'skills'];
+const TOOL_LIST_KEYS = ['tools', 'disallowedTools', 'allowed-tools', 'skills', 'arguments'];
 
 /**
  * Semantic equality (P0-07): same frontmatter keys and values (tool lists compared as sets,
@@ -30,18 +34,36 @@ function semantic(text: string) {
   return { data, body: toLf(fm.body).trim() };
 }
 
-/** native group → canonical → library folder on disk → canonical → native files. */
-async function roundTrip(group: NativeGroup) {
+/**
+ * native group → canonical → library folder on disk → canonical → native files. `others` are
+ * the rest of the parsed items, so references resolve the way they would in a real library.
+ */
+async function roundTrip(group: NativeGroup, others: LibraryItem[] = []) {
   const { item, warnings } = parseGroup(group);
   const lib = new MemFs();
   const dir = itemDir(join('/', 'lib'), item.manifest);
   await writeItem(lib, dir, item);
-  const compiled = compileItem(await readItem(lib, dir));
-  return { item, warnings, compiled };
+  const reread = await readItem(lib, dir);
+  const items = [...others.filter((o) => o.manifest.id !== reread.manifest.id), reread];
+  // Skills from plugins or elsewhere aren't in the scanned set; stub them so refs resolve.
+  const stubs = buildGraph(items).broken.map((e) => ({
+    manifest: parseManifest({
+      id: e.to,
+      kind: e.to.split('.')[0],
+      slug: e.to.split('.')[1],
+      name: e.to,
+      description: 'stub',
+    }),
+    body: '',
+    files: {},
+  }));
+  const graph = buildGraph([...items, ...stubs]);
+  const resolved = resolveClosure(graph, [reread.manifest.id]).at(-1)!;
+  return { item, warnings, compiled: compileItem(resolved) };
 }
 
-async function expectRoundTrip(group: NativeGroup) {
-  const { compiled } = await roundTrip(group);
+async function expectRoundTrip(group: NativeGroup, others: LibraryItem[] = []) {
+  const { compiled } = await roundTrip(group, others);
   expect(compiled.map((f) => f.relPath).sort()).toEqual(group.files.map((f) => f.relPath).sort());
   for (const native of group.files) {
     const out = compiled.find((f) => f.relPath === native.relPath)!;
@@ -74,7 +96,9 @@ describe('Claude Code adapter: fixtures', () => {
   });
 
   it('round-trips every fixture item: parse → library → compile ≈ original', async () => {
-    for (const group of await scanRoot(new NodeFs(), FIXTURE_ROOT)) await expectRoundTrip(group);
+    const groups = await scanRoot(new NodeFs(), FIXTURE_ROOT);
+    const all = groups.map((g) => parseGroup(g).item);
+    for (const group of groups) await expectRoundTrip(group, all);
   });
 
   it('produces reviewed canonical manifests (golden)', async () => {
@@ -104,12 +128,12 @@ describe('Claude Code adapter: fixtures', () => {
     const legacy = parseGroup(groups.find((g) => g.entry === 'agents/legacy.md')!).item;
     expect(legacy.manifest.slug).toBe('legacy-helper');
     const review = parseGroup(groups.find((g) => g.entry === 'commands/review-pr.md')!).item;
-    expect(review.body).toContain('Review pull request {{arg1}} with focus on {{arg2}}.');
+    expect(review.body).toContain('Review pull request {{arg2}} with focus on {{arg3}}.');
     expect(review.body).toContain('\\{{ double braces }}');
   });
 
   it('exposes the draft ToolAdapter surface', () => {
-    const adapter = createClaudeCodeAdapter(new NodeFs());
+    const adapter = createClaudeCodeAdapter({ fs: new NodeFs(), home: '/', env: {} });
     expect(adapter.id).toBe('claude-code');
   });
 });
@@ -121,6 +145,7 @@ describe.skipIf(!REAL)('Claude Code adapter: real ~/.claude (AMC_REAL_HOME=1)', 
     const root = process.env['CLAUDE_CONFIG_DIR'] ?? join(homedir(), '.claude');
     const groups = await scanRoot(new NodeFs(), root);
     expect(groups.length).toBeGreaterThan(0);
-    for (const group of groups) await expectRoundTrip(group);
+    const all = groups.map((g) => parseGroup(g).item);
+    for (const group of groups) await expectRoundTrip(group, all);
   });
 });

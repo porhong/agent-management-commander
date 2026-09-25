@@ -65,6 +65,13 @@
 | T1.3.6 | Managed `AGENTS.md` sections | If Codex needs content inside a **shared** file such as `AGENTS.md`, AMC writes only between markers `<!-- amc:begin <id> -->…<!-- amc:end <id> -->` and never touches text outside them | Tests: user text above, below, and between blocks survives compile → apply → re-apply |
 | T1.3.7 | Project scope | `paths(scope)` for the project scope of both tools. `Target = { toolId, scope: 'global' } \| { toolId, scope: 'project', root }` | A project target writes only under its root |
 
+> **M1.3 outcome (2026-09-25):** SDK in `packages/core/src/adapter/`; adapters in `packages/adapters/{claude-code,codex-cli}`. Decisions beyond the table:
+> - **Multi-root targets.** `paths(target)` returns named roots, and each `CompiledFile`/`NativeGroup` names its root. Codex needs two roots (`~/.codex` and `~/.agents`); Claude Code has one. The deployer (M1.4) keeps one lockfile per root. `~/.agents` can be shared by several tools' targets.
+> - **Adapter inputs.** Adapters are built from an injected `AdapterHost` (`fs`, `home`, `env`, `runVersion`), so detection and scanning are testable. `compile(ResolvedItem, Target)` replaced `compile(LibraryItem)`, so compiled output uses a referenced item's *current* slug after a rename.
+> - **Canonical positional placeholders are 1-based** (`{{arg1}}` is the first argument). Claude Code's `$N` is confirmed 0-based, so `$0` ↔ `{{arg1}}`. The old compile emitted 1-based `$N` for named arguments, which was off by one. Claude named arguments are now native (`arguments:` + `$name`).
+> - **T1.3.6** provides the mechanism (`spliceRegion`/`readRegion`/`listRegions`, and `CompiledFile.region`), with property tests for S7. No Phase 1 compile output needs a region yet, since always-on skills are inlined into agent TOML. Broken markers raise `REGION_MALFORMED` instead of being guessed at.
+> - **New rules:** `template-placeholders` (core); `claude-code:skill-listing-length`; `description-limit:codex-cli:skill` and `codex-cli:project-command-as-skill`.
+>
 > **Note on T1.3.6:** ownership is tracked at the **file** level in the concept docs. Shared files need **region-level ownership**. The lockfile records `{ kind: "region", markerId, sha256 }` for these entries.
 
 ## M1.4: Deployer

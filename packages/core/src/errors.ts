@@ -13,7 +13,9 @@ export type AmcErrorCode =
   | 'TEMPLATE_NOT_FOUND'
   | 'GIT_FAILED'
   | 'REF_BROKEN'
-  | 'REF_CYCLE';
+  | 'REF_CYCLE'
+  | 'REGION_MALFORMED'
+  | 'ADAPTER_NOT_FOUND';
 
 export class AmcError extends Error {
   constructor(

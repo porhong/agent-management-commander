@@ -88,3 +88,24 @@ Source: https://learn.chatgpt.com/docs/config-file/config-reference, …/config-
 
 - **`~/.agents/skills` is shared.** Other tools read it, and on this machine Claude Code does too, through junctions. A skill deployed there is effectively installed for every tool that reads it. The deploy plan and the deployment matrix must show that, and dedupe must treat such a skill as one item with multiple consumers.
 - Codex agents are TOML, so we need a TOML parser and serializer. The candidate is `smol-toml`. That work belongs to M1.3.
+
+## 9. AMC mapping (implemented in `src/`, M1.3)
+
+- **Roots.** A target writes into two roots:
+  - `codex`: `~/.codex` (or `$CODEX_HOME`); in projects, `<project>/.codex`.
+  - `agents`: `~/.agents`; in projects, `<project>/.agents`.
+  - Custom prompts are scanned and written at global scope only.
+- **Agent TOML layout.** `stringifyAgentToml` writes plain keys first, then `developer_instructions` as a `'''` multi-line literal (falling back to an escaped string if the text contains `'''` or control characters), then tables.
+- **Tools.** `sandbox_mode` comes from `tools.allow`. It is `workspace-write` if the list includes `write`, `edit`, `shell`, or `shell:<x>` (except `shell:readonly`), and `read-only` otherwise. It is never `danger-full-access`. A native `sandbox_mode` is kept exactly in `compat.overrides.codex-cli.sandbox_mode` and is never inferred back into tools.
+- **Models.** The tier → model table is **empty by default** (`createCodexAdapter(host, { models })`). An unmapped tier omits `model` and reports `agent.model.unmapped`. A native model that isn't in the table goes to `…model`.
+- **Prompt templates.**
+  - `$ARGUMENTS` ↔ `{{args}}`.
+  - `$1`–`$9` ↔ `{{arg1}}`–`{{arg9}}`. Higher positions compile to `$ARGUMENTS`, with an adaptation.
+  - `$NAME` ↔ `{{name}}`.
+  - `$$` ↔ a literal `$`. On compile, any literal `$` followed by `[A-Z0-9$]` is escaped as `$$`.
+- **Project commands** become `agents:skills/<slug>/SKILL.md`. Placeholders become `<name>`, preceded by an argument list. A validator rule rejects a project command whose slug a skill already uses, or whose description exceeds 1,024 characters.
+- **Degradations** are all reported as `adaptations[]`:
+  - always-on skills (with their dependencies) are inlined into `developer_instructions`
+  - `delegatesTo` and command → agent/preload become prompt text
+  - the tool deny list, per-skill and per-command tools, and triggers are dropped
+- **Known gap.** A prompt named argument called `$ARGS` or `$ARG<N>` would collide with canonical `{{args}}`/`{{argN}}`. This hasn't been seen in practice.
