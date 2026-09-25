@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { promises as fs } from 'node:fs';
-import { basename, dirname, join, relative, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { AmcError } from '../errors';
 import type { DirEntry, FsPort, Stat } from './fs-port';
 
@@ -84,5 +84,21 @@ export class NodeFs implements FsPort {
   async rename(from: string, to: string): Promise<void> {
     await fs.mkdir(dirname(to), { recursive: true });
     await withRetry(() => fs.rename(from, to));
+  }
+
+  async realpath(path: string): Promise<string> {
+    const missing: string[] = [];
+    let p = resolve(path);
+    for (;;) {
+      try {
+        return join(await fs.realpath(p), ...missing.reverse());
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+        const parent = dirname(p);
+        if (parent === p) return resolve(path);
+        missing.push(basename(p));
+        p = parent;
+      }
+    }
   }
 }

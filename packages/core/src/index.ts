@@ -6,4 +6,5 @@ export * from './library';
 export * from './resolver';
 export * from './validator';
 export * from './adapter';
+export * from './deploy';
 export { manifestJsonSchema } from './model/json-schema';

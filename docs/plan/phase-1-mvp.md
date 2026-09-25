@@ -108,6 +108,16 @@ interface TargetPlan {
 }
 ```
 
+> **M1.4 outcome (2026-09-25):** done in `packages/core/src/deploy/` (`lockfile.ts`, `planner.ts`, `service.ts`). Tests cover S1 (property), S2, S3, S4 (including a real Windows junction), S5, S7, and S8 (crash after 0–3 writes → rollback or complete). Decisions beyond the table:
+> - **Lockfiles.** One `.amc-lock.json` per target *root*. Entries carry `targetId`, and managed regions live under `regions[relPath][id]`. The concept-doc layout without `schemaVersion` migrates to v1. A newer schema counts as corrupt, which means no writes.
+> - **Desired state.** `plan()` takes the **full desired item set** per target (the closure is added automatically), not a delta. A selection that fails to resolve makes the target `needs-attention` with no changes, so a broken reference can never turn into "delete everything".
+> - **Conflicts.** A byte-identical foreign file is adopted as `unchanged` (no write). A drifted file that is no longer selected is a `drifted` conflict, never a silent delete. A path whose realpath leaves the root is a `linked` conflict with `skip` as the only option. Apply re-checks realpath before any write.
+> - **S1 and regions.** S1 applies to whole files. Creating a managed region inside an existing shared file is a normal `create`: S7 guarantees the bytes outside the markers.
+> - **Rollback** restores files byte-for-byte and restores lock entries one by one, so lockfile edits by later deploys don't block it. Only the rolled-back files themselves must be untouched (S3).
+> - **Snapshot pruning** deletes a snapshot only when it is beyond the newest 50 **and** older than 30 days. The latest snapshot and those of unfinished deploys are always kept.
+> - **Deferred to M1.5 (index):** mirroring lockfiles into SQLite, recovering a deleted lockfile from the index, and storing `DeploymentRecord` rows. `apply` already returns the records.
+> - Deletes remove folders left empty, strictly inside the root.
+
 ## M1.5: Desktop shell, IPC, index
 
 | ID | Task | Deliverables | Acceptance |

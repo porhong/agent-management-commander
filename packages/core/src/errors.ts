@@ -15,7 +15,13 @@ export type AmcErrorCode =
   | 'REF_BROKEN'
   | 'REF_CYCLE'
   | 'REGION_MALFORMED'
-  | 'ADAPTER_NOT_FOUND';
+  | 'ADAPTER_NOT_FOUND'
+  | 'LOCK_CORRUPT'
+  | 'PLAN_BLOCKED'
+  | 'PLAN_STALE'
+  | 'CONFLICTS_UNRESOLVED'
+  | 'DEPLOY_NOT_FOUND'
+  | 'ROLLBACK_REFUSED';
 
 export class AmcError extends Error {
   constructor(
