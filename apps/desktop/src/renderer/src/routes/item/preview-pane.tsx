@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertTriangle, FileText, GitCompareArrows } from 'lucide-react';
 import { DiffView } from '@/components/editor/diff-view';
 import { Button } from '@/components/ui/button';
@@ -31,7 +31,12 @@ export function PreviewPane({ id, draft, dirty }: { id: string; draft: Draft; di
   const [comparing, setComparing] = useState(false);
   const [deployed, setDeployed] = useState<Record<string, string | null> | null>(null);
 
-  const available = useMemo(() => (tools.data ?? []).filter((t) => t.installed), [tools.data]);
+  /**
+   * Every tool AMC can deploy to, not only the ones found on this machine. The deploy screen
+   * offers all of them — a tool you have not installed yet still has a folder AMC would write
+   * to — so refusing to show what it would receive was just an inconsistency.
+   */
+  const available = tools.data ?? [];
   const current = toolId || available[0]?.toolId || '';
   const excluded = (
     Array.isArray((draft.manifest['compat'] as { exclude?: unknown })?.exclude)
@@ -110,6 +115,9 @@ export function PreviewPane({ id, draft, dirty }: { id: string; draft: Draft; di
             key={tool.toolId}
             type="button"
             onClick={() => setToolId(tool.toolId)}
+            title={
+              tool.installed ? undefined : `${tool.displayName} was not found on this machine.`
+            }
             className={`h-6 rounded-sm px-2 ${
               tool.toolId === current
                 ? 'bg-accent text-accent-foreground'
@@ -117,6 +125,7 @@ export function PreviewPane({ id, draft, dirty }: { id: string; draft: Draft; di
             }`}
           >
             {tool.displayName}
+            {!tool.installed && <span className="ml-1 opacity-60">·</span>}
           </button>
         ))}
         <div className="flex-1" />
@@ -130,7 +139,7 @@ export function PreviewPane({ id, draft, dirty }: { id: string; draft: Draft; di
 
       {available.length === 0 ? (
         <p className="p-4 text-muted-foreground">
-          No tools detected on this machine, so there is nothing to compile for yet.
+          No tools to compile for. AMC supports Claude Code and Codex CLI so far.
         </p>
       ) : excluded ? (
         <p className="p-4 text-muted-foreground">
