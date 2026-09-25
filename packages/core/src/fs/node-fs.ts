@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { promises as fs } from 'node:fs';
-import { basename, dirname, join, relative, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { AmcError } from '../errors';
 import type { DirEntry, FsPort, Stat } from './fs-port';
 
@@ -51,7 +51,16 @@ export class NodeFs implements FsPort {
   }
 
   async rm(path: string, opts?: { recursive?: boolean }): Promise<void> {
-    await withRetry(() => fs.rm(path, { force: true, recursive: opts?.recursive ?? false }));
+    const recursive = opts?.recursive ?? false;
+    await withRetry(async () => {
+      try {
+        await fs.rm(path, { force: true, recursive });
+      } catch (err) {
+        // Non-recursive `rm` refuses directories; the port's contract removes an empty one.
+        if ((err as NodeJS.ErrnoException).code !== 'ERR_FS_EISDIR') throw err;
+        await fs.rmdir(path);
+      }
+    });
   }
 
   async readdir(path: string, opts?: { recursive?: boolean }): Promise<DirEntry[]> {
@@ -84,5 +93,21 @@ export class NodeFs implements FsPort {
   async rename(from: string, to: string): Promise<void> {
     await fs.mkdir(dirname(to), { recursive: true });
     await withRetry(() => fs.rename(from, to));
+  }
+
+  async realpath(path: string): Promise<string> {
+    const missing: string[] = [];
+    let p = resolve(path);
+    for (;;) {
+      try {
+        return join(await fs.realpath(p), ...missing.reverse());
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+        const parent = dirname(p);
+        if (parent === p) return resolve(path);
+        missing.push(basename(p));
+        p = parent;
+      }
+    }
   }
 }

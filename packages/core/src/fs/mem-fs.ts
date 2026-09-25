@@ -16,6 +16,8 @@ export interface FsOp {
  */
 export class MemFs implements FsPort {
   private readonly nodes = new Map<string, Node>();
+  /** Simulated symlinks/junctions (link path → target), honoured only by `realpath`. */
+  private readonly links = new Map<string, string>();
   private clock = 1;
   readonly ops: FsOp[] = [];
 
@@ -28,6 +30,11 @@ export class MemFs implements FsPort {
     const p = resolve(path);
     this.ensureDirs(dirname(p));
     this.nodes.set(p, { kind: 'file', data: Buffer.from(data), mtimeMs: this.clock++ });
+  }
+
+  /** Declares `path` a link to `target` for realpath checks (other ops don't follow it). */
+  linkSync(path: string, target: string): void {
+    this.links.set(resolve(path), resolve(target));
   }
 
   /** Snapshot of all files (absolute path → utf8 content), useful for before/after assertions. */
@@ -104,6 +111,18 @@ export class MemFs implements FsPort {
     }
     this.nodes.delete(src);
     this.nodes.set(dst, n);
+  }
+
+  async realpath(path: string): Promise<string> {
+    let p = resolve(path);
+    for (let hops = 0; hops < 40; hops++) {
+      const link = [...this.links.keys()]
+        .filter((l) => p === l || p.startsWith(l + sep))
+        .sort((a, b) => b.length - a.length)[0];
+      if (!link) return p;
+      p = this.links.get(link)! + p.slice(link.length);
+    }
+    throw new Error(`Too many links: ${path}`);
   }
 
   private descendants(dir: string): string[] {

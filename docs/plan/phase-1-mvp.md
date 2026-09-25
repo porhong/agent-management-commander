@@ -30,6 +30,12 @@
 | T1.1.5 | Git history | `GitService` (isomorphic-git): init the repo, auto-commit on each save with the message `amc: update skill.security-checklist (1.3.0)`, `log(itemPath)`, `show(rev, path)`, `restore(rev, itemPath)` | History for one item lists only its commits. Restore creates a new commit |
 | T1.1.6 | Item templates | Built-in starter templates per kind (e.g. "Checklist skill", "Reviewer agent", "Slash command with args") as data in core | `create({ template })` yields a valid item |
 
+> **M1.1 outcome (2026-09-25):** done in `packages/core/src/library/` (`bootstrap.ts`, `service.ts`, `git.ts`, `templates.ts`, `versioning.ts`). Decisions beyond the table:
+> - `createdAt`/`updatedAt` live in `amc.yaml` as optional ISO fields. Metadata-only fields (`tags`, `author`, `license`, timestamps) never bump the version. Rename counts as a content change (it changes deployed file names), so it bumps patch.
+> - A freed slug gets a suffixed id (`skill.sec-2`) if a renamed item still holds `skill.sec`.
+> - Each commit carries an `Amc-Item: <id>` trailer. `history(id)` filters on it, so an item's history survives renames. `restore` lives in `LibraryService`: it finds the item at the old revision by id (not by folder), keeps the current slug, and writes a new version.
+> - `LibraryService` depends on a `LibraryHistory` interface (`NoHistory` for `MemFs` tests). `GitService` is the only core code that touches disk without `FsPort`, because isomorphic-git needs a node-style fs client.
+
 ## M1.2: Resolver & validator
 
 | ID | Task | Deliverables | Acceptance |
@@ -39,6 +45,13 @@
 | T1.2.3 | ResolvedItem | Referenced items embedded (for example, an agent with its equipped skills' manifests and bodies) so that `compile` stays pure | Adapters never touch the library directly |
 | T1.2.4 | Validator framework | `Rule { id, severity, check(ctx) → Issue[] }`. Issues carry `itemId`, `path` (field), `targetId?`, message, and optional `fix` | Rules can be registered by adapters (per-target rules) |
 | T1.2.5 | Initial rules | The rules in [concept 05 §6](../concept/05-architecture.md#6-validation-rules-initial-set) **plus** the secret scanner (regex set for common key formats) and the path-safety check on slugs | Each rule has passing and failing fixtures |
+
+> **M1.2 outcome (2026-09-25):** done in `packages/core/src/resolver/` and `packages/core/src/validator/`. Decisions beyond the table:
+> - Edge relations are `equips`, `delegates-to`, `uses-agent`, `preloads`, and `depends-on`. Each edge carries its manifest field path (`skills.1.ref`), so issues point at the field and the "remove reference" fix drops only that entry.
+> - `resolveClosure` throws `REF_BROKEN`/`REF_CYCLE`. Callers run the validator first to get the same problems as issues. Shared dependencies are the same `ResolvedItem` object.
+> - Issues carry `blocking`: always true for errors, and also true for untrusted skill scripts, which are a warning that blocks deploy. A fix is data (`{ itemId, fields }`) applied through `LibraryService.update`.
+> - Per-tool rules come from factories that adapters register in M1.3: `descriptionLimitRule(toolId, limit, severity)` and `slugNamingRule(toolId, check)`. The core path-safety rule rejects Windows device names (`con`, `nul`, `lpt1`, …), which pass the slug regex.
+> - The inline-size threshold is 40,000 characters (body + always-on skills + their dependencies). `unused-item` runs only when deploy data is passed in, which happens once M1.4 exists.
 
 ## M1.3: Adapters (Claude Code, Codex CLI)
 
@@ -52,6 +65,13 @@
 | T1.3.6 | Managed `AGENTS.md` sections | If Codex needs content inside a **shared** file such as `AGENTS.md`, AMC writes only between markers `<!-- amc:begin <id> -->…<!-- amc:end <id> -->` and never touches text outside them | Tests: user text above, below, and between blocks survives compile → apply → re-apply |
 | T1.3.7 | Project scope | `paths(scope)` for the project scope of both tools. `Target = { toolId, scope: 'global' } \| { toolId, scope: 'project', root }` | A project target writes only under its root |
 
+> **M1.3 outcome (2026-09-25):** SDK in `packages/core/src/adapter/`; adapters in `packages/adapters/{claude-code,codex-cli}`. Decisions beyond the table:
+> - **Multi-root targets.** `paths(target)` returns named roots, and each `CompiledFile`/`NativeGroup` names its root. Codex needs two roots (`~/.codex` and `~/.agents`); Claude Code has one. The deployer (M1.4) keeps one lockfile per root. `~/.agents` can be shared by several tools' targets.
+> - **Adapter inputs.** Adapters are built from an injected `AdapterHost` (`fs`, `home`, `env`, `runVersion`), so detection and scanning are testable. `compile(ResolvedItem, Target)` replaced `compile(LibraryItem)`, so compiled output uses a referenced item's *current* slug after a rename.
+> - **Canonical positional placeholders are 1-based** (`{{arg1}}` is the first argument). Claude Code's `$N` is confirmed 0-based, so `$0` ↔ `{{arg1}}`. The old compile emitted 1-based `$N` for named arguments, which was off by one. Claude named arguments are now native (`arguments:` + `$name`).
+> - **T1.3.6** provides the mechanism (`spliceRegion`/`readRegion`/`listRegions`, and `CompiledFile.region`), with property tests for S7. No Phase 1 compile output needs a region yet, since always-on skills are inlined into agent TOML. Broken markers raise `REGION_MALFORMED` instead of being guessed at.
+> - **New rules:** `template-placeholders` (core); `claude-code:skill-listing-length`; `description-limit:codex-cli:skill` and `codex-cli:project-command-as-skill`.
+>
 > **Note on T1.3.6:** ownership is tracked at the **file** level in the concept docs. Shared files need **region-level ownership**. The lockfile records `{ kind: "region", markerId, sha256 }` for these entries.
 
 ## M1.4: Deployer
@@ -88,6 +108,16 @@ interface TargetPlan {
 }
 ```
 
+> **M1.4 outcome (2026-09-25):** done in `packages/core/src/deploy/` (`lockfile.ts`, `planner.ts`, `service.ts`). Tests cover S1 (property), S2, S3, S4 (including a real Windows junction), S5, S7, and S8 (crash after 0–3 writes → rollback or complete). Decisions beyond the table:
+> - **Lockfiles.** One `.amc-lock.json` per target *root*. Entries carry `targetId`, and managed regions live under `regions[relPath][id]`. The concept-doc layout without `schemaVersion` migrates to v1. A newer schema counts as corrupt, which means no writes.
+> - **Desired state.** `plan()` takes the **full desired item set** per target (the closure is added automatically), not a delta. A selection that fails to resolve makes the target `needs-attention` with no changes, so a broken reference can never turn into "delete everything".
+> - **Conflicts.** A byte-identical foreign file is adopted as `unchanged` (no write). A drifted file that is no longer selected is a `drifted` conflict, never a silent delete. A path whose realpath leaves the root is a `linked` conflict with `skip` as the only option. Apply re-checks realpath before any write.
+> - **S1 and regions.** S1 applies to whole files. Creating a managed region inside an existing shared file is a normal `create`: S7 guarantees the bytes outside the markers.
+> - **Rollback** restores files byte-for-byte and restores lock entries one by one, so lockfile edits by later deploys don't block it. Only the rolled-back files themselves must be untouched (S3).
+> - **Snapshot pruning** deletes a snapshot only when it is beyond the newest 50 **and** older than 30 days. The latest snapshot and those of unfinished deploys are always kept.
+> - **Deferred to M1.5 (index):** mirroring lockfiles into SQLite, recovering a deleted lockfile from the index, and storing `DeploymentRecord` rows. `apply` already returns the records.
+> - Deletes remove folders left empty, strictly inside the root.
+
 ## M1.5: Desktop shell, IPC, index
 
 | ID | Task | Deliverables | Acceptance |
@@ -99,6 +129,15 @@ interface TargetPlan {
 | T1.5.5 | Worker offload | Scans, rebuilds, and plan computation run in an Electron `utilityProcess`, with progress events | The UI stays at 60fps during a 1,000-item rebuild (manual perf check) |
 | T1.5.6 | Settings & logging | `settings.json` (Zod-validated), rotating log files in `~/.amc/logs`, and a "Copy diagnostics" action | Logs never contain file *contents*, only paths and hashes |
 | T1.5.7 | Mock API | `renderer/src/mocks/amc-mock.ts` implementing the contract with fixture data, enabled by `VITE_AMC_MOCK=1` | UI track can develop without a real core |
+
+> **M1.5 outcome (2026-09-25):** index in `packages/core/src/index-store/`; settings and logging in `packages/core/src/{settings,log}/`; the app layer in `apps/desktop/src/{shared,main,preload}/`. Decisions beyond the table:
+> - **No path ever crosses IPC.** A folder is chosen with `dialog.pickFolder`, which returns an opaque `tok_<32 hex>`; `PathTokenRegistry` in main is the only thing that can turn it back into a path. Project targets are addressed by token, and every id/slug is regex-validated at the boundary.
+> - **Plans stay in main.** `deploy.plan` returns a `planId`; `deploy.apply` takes only that id, so the renderer can't hand-craft a plan. Applying consumes the id, and only the last 20 plans are kept.
+> - **The preload is schema-free.** It builds `window.amc` from `shared/channels.ts` (plain strings), so Zod never reaches the sandboxed preload (bundle: 1.4 kB). A test asserts that list equals the contract's channels.
+> - **The index is derived, never authoritative.** Deployments and the matrix are recomputed from the lockfile mirror, so `rebuild()` always reproduces them. An outdated schema is dropped and rebuilt rather than migrated. `DeployService` now takes a `lockMirror`, which closes the T1.4.1 gap: a deleted lockfile puts the target on hold, with `restoreLockfile` / `forgetLockfile` as the two ways out.
+> - **Worker offload** runs library loading in a `utilityProcess` and falls back in-process when it can't start, dies, or times out. Verified in real Electron: `AMC_SMOKE=1` with `AMC_HOME` set reports `{"ok":true,"items":2,"fallbacks":[]}`, and CI now asserts that.
+> - **Logs hold paths and hashes only:** field names like `content`, `body`, `before` and `after` are replaced with `[redacted]`, and long values are truncated. Settings degrade to defaults rather than blocking startup.
+> - Found and fixed along the way: `NodeFs.rm` threw `EISDIR` on an empty directory while `MemFs` removed it. Both now match, with a contract test.
 
 ## M1.6: Library UI & item editor
 

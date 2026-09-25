@@ -32,6 +32,8 @@ const KEY_ORDER = [
   'tags',
   'author',
   'license',
+  'createdAt',
+  'updatedAt',
   // skill
   'triggers',
   'dependsOn',

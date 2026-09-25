@@ -145,9 +145,9 @@ allowedTools:
   - shell
   - read
 arguments:
-  - name: arg1
-    required: false
   - name: arg2
+    required: false
+  - name: arg3
     required: false
 compat:
   overrides:
@@ -156,7 +156,7 @@ compat:
         argument-hint: "[pr-number] [focus]"
       allowed-tools: Bash(git diff:*), Bash(gh pr view:*), Read
 --- body ---
-Review pull request {{arg1}} with focus on {{arg2}}.
+Review pull request {{arg2}} with focus on {{arg3}}.
 
 Full arguments: {{args}}
 

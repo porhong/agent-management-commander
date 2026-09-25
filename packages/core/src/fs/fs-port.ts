@@ -14,6 +14,11 @@ export interface FsPort {
   stat(path: string): Promise<Stat | null>;
   mkdirp(path: string): Promise<void>;
   rename(from: string, to: string): Promise<void>;
+  /**
+   * Canonical path with symlinks and junctions resolved. Works for paths that don't exist yet by
+   * resolving the deepest existing ancestor, so write targets can be checked before writing (S4).
+   */
+  realpath(path: string): Promise<string>;
 }
 
 export interface DirEntry {

@@ -38,7 +38,11 @@ Source: https://code.claude.com/docs/en/claude-directory.md
 
 - Single Markdown files. Subfolders act as namespaces, but the command name is still the file's base name.
 - Frontmatter uses the same keys as skills, minus `name`. Frontmatter is optional, and so is `description`.
-- Placeholders are `$ARGUMENTS` and positional `$N`. It is **UNCONFIRMED** whether the first positional is `$0` or `$1`, because the docs mention `$0`. AMC keeps indices exactly as written (`$N` becomes `{{argN}}` and back), so round-trips are safe either way.
+- Placeholders (**confirmed 2026-09-25** in skills.md):
+  - `$ARGUMENTS` holds all arguments.
+  - `$ARGUMENTS[N]` and its shorthand `$N` are **0-based**: `$0` is the first argument.
+  - `$name` works for names declared in the `arguments` frontmatter list (a space-separated string or a YAML list). Names map to positions in order.
+- `context: fork` plus `agent: <name>` runs the command in that subagent. Command files accept every skill key except `name` and `paths`.
 - `` !`cmd` `` (shell output injection) and `@path` (file reference) pass through untouched in the body.
 
 ## 5. Tools and permission syntax
@@ -72,6 +76,11 @@ Source: https://code.claude.com/docs/en/permissions.md
 | `tools` / `disallowedTools` / `allowed-tools` | `tools.allow` / `tools.deny` / `allowedTools` (abstract: `read`, `search`, `shell`, `mcp:<server>`…) | exact original value under the same key     |
 | `model: opus/sonnet/haiku/inherit`            | `model.preferred: powerful/balanced/fast/inherit`                                                    | other values (`fable`, full IDs) → `…model` |
 | agent `skills:` (preload)                     | `skills[].mode: always`                                                                              | `…skills` if names aren't slugs             |
-| `$ARGUMENTS` / `$N`                           | `{{args}}` / `{{argN}}`                                                                              | literal `{{` escaped as `\{{`               |
+| `$ARGUMENTS` / `$N` (0-based)                 | `{{args}}` / `{{arg<N+1>}}` (canonical positions are 1-based)                                        | literal `{{` escaped as `\{{`               |
+| command `arguments:` + `$name`                | `arguments[].name` + `{{name}}`                                                                      | non-identifier names stay in `…raw`         |
+| skill `when_to_use`                           | compiled from `triggers` (`Use when: a; b`)                                                          | a native `when_to_use` stays in `…raw`      |
+| command → agent                               | `context: fork` + `agent: <agent name>`                                                              | native `context`/`agent` stay in `…raw`     |
+| command → preloaded skills                    | a "Use these skills" list at the top of the body (degraded)                                          | —                                           |
+| agent → `delegatesTo`                         | a "Subagents you may delegate to" list in the body (degraded)                                        | —                                           |
 | missing `description`                         | derived from the first body line                                                                     | `…derivedDescription: true` (not emitted)   |
 | any other frontmatter key                     | —                                                                                                    | `…raw` (verbatim passthrough)               |

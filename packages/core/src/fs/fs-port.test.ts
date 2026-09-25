@@ -1,6 +1,6 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isAmcError } from '../errors';
 import type { FsPort } from './fs-port';
@@ -89,6 +89,42 @@ describe.each(impls)('FsPort contract: %s', (_name, make) => {
     await fs.rm(join(root, 'd'), { recursive: true });
     expect(await fs.stat(join(root, 'd'))).toBeNull();
     await expect(fs.rm(join(root, 'missing'))).resolves.toBeUndefined();
+  });
+
+  it('removes an empty directory without recursive, but refuses a non-empty one', async () => {
+    await fs.mkdirp(join(root, 'empty'));
+    await fs.rm(join(root, 'empty'));
+    expect(await fs.stat(join(root, 'empty'))).toBeNull();
+
+    await fs.writeFileAtomic(join(root, 'full', 'f.md'), 'z');
+    await expect(fs.rm(join(root, 'full'))).rejects.toThrow();
+    expect(await fs.stat(join(root, 'full', 'f.md'))).not.toBeNull();
+  });
+});
+
+describe('realpath (S4)', () => {
+  it('NodeFs resolves junctions, including for paths that do not exist yet', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'amc-real-'));
+    try {
+      const fs = new NodeFs();
+      const outside = join(root, 'outside');
+      await fs.mkdirp(outside);
+      await symlink(outside, join(root, 'link'), 'junction');
+      const real = await fs.realpath(join(root, 'link', 'new', 'file.md'));
+      expect(real).toBe(join(await realpath(outside), 'new', 'file.md'));
+      expect(await fs.realpath(join(root, 'missing', 'x'))).toBe(
+        join(await realpath(root), 'missing', 'x'),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('MemFs honours simulated links for realpath only', async () => {
+    const fs = new MemFs();
+    fs.linkSync(join('/', 'a', 'link'), join('/', 'b'));
+    expect(await fs.realpath(join('/', 'a', 'link', 'x'))).toBe(resolve('/', 'b', 'x'));
+    expect(await fs.realpath(join('/', 'a', 'linkage'))).toBe(resolve('/', 'a', 'linkage'));
   });
 });
 
